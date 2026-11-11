@@ -25,6 +25,8 @@ public sealed class Configuration : Dalamud.Configuration.IPluginConfiguration
     // ---------------- Dismounting ----------------
     /// <summary>Using an action that can't be used on a mount gets you off it, then the action goes off.</summary>
     public bool DismountOnAction { get; set; } = true;
+    /// <summary>...then use that action once you're on your feet. Off: only dismount (e.g. a rotation plugin takes over).</summary>
+    public bool ReplayAction { get; set; } = true;
     public bool DismountOnEnemy { get; set; } = true;
     public EnemyDismount EnemyMode { get; set; } = EnemyDismount.InRange;
 

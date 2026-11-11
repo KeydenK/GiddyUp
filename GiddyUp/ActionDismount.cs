@@ -27,8 +27,11 @@ internal sealed unsafe class ActionDismount : IDisposable
     private long _queuedAt;
     private float _timeout;
     private bool _replaying;
+    private long _dismountSentAt, _dismountExpectedMs;
 
     internal bool HookWorks => _hook != null;
+    /// <summary>An action is waiting to be used once you are off the mount (on-foot features hold back meanwhile).</summary>
+    internal bool ReplayPending => _queued;
 
     public ActionDismount(Plugin p)
     {
@@ -55,13 +58,23 @@ internal sealed unsafe class ActionDismount : IDisposable
     {
         try
         {
+            // Off the mount and another action came first (a rotation plugin, or you): it wins, no replay on top of it.
+            if (_queued && !_replaying && type == ActionType.Action && !Plugin.Condition[ConditionFlag.Mounted])
+            {
+                Plugin.Info($"{Game.ActionName(id)} came first after dismounting: not using {Game.ActionName(_id)} too");
+                StopReplay();
+            }
+
             if (!_replaying && _p.Config.DismountOnAction && Plugin.Condition[ConditionFlag.Mounted]
                 && !Plugin.Condition[ConditionFlag.RidingPillion] && NeedsDismount(am, type, id, target))
             {
-                // Already getting off (pressed again while landing): this press replaces the waiting action.
-                if (_queued)
+                var now = Environment.TickCount64;
+                // Already getting off (pressed again while landing): don't press Dismount again; with the replay on,
+                // this press replaces the waiting action.
+                if (now - _dismountSentAt < _dismountExpectedMs)
                 {
-                    Queue(type, id, target, extra, mode, combo, _timeout);
+                    if (_queued)
+                        Queue(type, id, target, extra, mode, combo, _timeout);
                     return false;
                 }
                 // Dismount instead of the action (the original function directly, so this doesn't come back here).
@@ -71,8 +84,12 @@ internal sealed unsafe class ActionDismount : IDisposable
                     var flying = Plugin.Condition[ConditionFlag.InFlight];
                     var height = flying ? Mounted.HeightAboveLanding() : 0f;
                     var expected = flying ? _p.Speeds.LandingSeconds(float.IsNaN(height) ? 0f : height) : _p.Config.GetOffSeconds;
-                    Queue(type, id, target, extra, mode, combo, expected * 2f + 1f);
-                    Plugin.Info($"Dismount to use {Game.ActionName(id)}{(flying ? " (landing first)" : "")}");
+                    _dismountSentAt = now;
+                    _dismountExpectedMs = (long)((expected * 2f + 1f) * 1000);
+                    if (_p.Config.ReplayAction)
+                        Queue(type, id, target, extra, mode, combo, expected * 2f + 1f);
+                    Plugin.Info($"Dismount for {Game.ActionName(id)}{(flying ? " (landing first)" : "")}"
+                              + (_p.Config.ReplayAction ? "" : " (not using it afterwards: option off)"));
                 }
                 return false;
             }

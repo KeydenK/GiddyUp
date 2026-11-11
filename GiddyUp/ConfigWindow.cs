@@ -120,9 +120,18 @@ internal sealed unsafe class ConfigWindow : Window
     private void DrawDismounting()
     {
         Check("Dismount when you use an action", () => Config.DismountOnAction, v => Config.DismountOnAction = v,
-              "Press any action the game won't let you use on a mount: you get off and the action goes off as soon "
-            + "as you're on your feet (after landing, if you were flying). A press that wouldn't work anyway "
+              "Press any action the game won't let you use on a mount: you get off (after landing, if you were "
+            + "flying). A press that wouldn't work anyway "
             + "(target out of range or sight, on cooldown) leaves you on your mount.");
+        if (Config.DismountOnAction)
+        {
+            ImGui.Indent();
+            Check("Then use the action", () => Config.ReplayAction, v => Config.ReplayAction = v,
+                  "Once you're off, Giddy Up uses the action you pressed. Turn this off if a rotation plugin plays your "
+                + "actions for you: you'll just be dismounted and it takes over. Either way, if any other action is used "
+                + "first after you land, Giddy Up doesn't use yours on top of it.");
+            ImGui.Unindent();
+        }
         Check("Dismount for an enemy you target", () => Config.DismountOnEnemy, v => Config.DismountOnEnemy = v);
         if (Config.DismountOnEnemy)
         {

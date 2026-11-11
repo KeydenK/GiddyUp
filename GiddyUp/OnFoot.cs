@@ -188,7 +188,7 @@ internal sealed unsafe class OnFoot : IDisposable
         }
 
         var c = Plugin.Condition;
-        if (walking || Game.IsMounted || c[ConditionFlag.InCombat] || Game.Busy())
+        if (walking || Game.IsMounted || c[ConditionFlag.InCombat] || Game.Busy() || _p.ActionDismount.ReplayPending)
             return;
 
         var reacted = _movingFor >= Config.MoveSeconds;

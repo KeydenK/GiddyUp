@@ -64,7 +64,9 @@ internal sealed unsafe class ActionDismount : IDisposable
 
     private bool Detour(ActionManager* am, ActionType type, uint id, ulong target, uint extra, UseActionMode mode, uint combo, bool* outAreaTargeted)
     {
-        if (type is ActionType.Action or ActionType.Item && !Game.OwnCall && !_replaying)
+        // Peloton (whoever uses it) is a running buff, not a sign you're still busy: like Sprint, it doesn't delay the mount.
+        if (type is ActionType.Action or ActionType.Item && !Game.OwnCall && !_replaying
+            && !(type == ActionType.Action && id == Game.PelotonAction))
             LastActionAt = Environment.TickCount64;
         try
         {

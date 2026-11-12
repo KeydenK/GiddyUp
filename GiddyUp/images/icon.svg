@@ -51,6 +51,8 @@
     <path d="M0 488 C120 470 220 492 330 474 S460 486 512 470"/>
   </g>
 
+  <!-- the whole scene, scaled up to fill the frame -->
+  <g transform="translate(256 262) scale(1.23) translate(-216 -281)">
   <!-- motion lines (galloping along) -->
   <g filter="url(#glow2)" stroke="#ffd27a" stroke-linecap="round" fill="none">
     <line x1="44"  y1="262" x2="124" y2="262" stroke-width="11"/>
@@ -132,10 +134,11 @@
     <path d="M316 274 Q352 268 370 232" stroke="#1b1233" stroke-width="6" stroke-linecap="round" fill="none"/>
     <path d="M316 274 Q352 268 370 232" stroke="#e8b864" stroke-width="2.5" stroke-linecap="round" fill="none"/>
   </g>
+  </g>
 
   <!-- sparkles -->
   <path d="M70 74 L74.32 87.68 L88 92 L74.32 96.32 L70 110 L65.68 96.32 L52 92 L65.68 87.68 Z" fill="#fff0c8"/>
-  <path d="M452 323 L455.12 332.88 L465 336 L455.12 339.12 L452 349 L448.88 339.12 L439 336 L448.88 332.88 Z" fill="#fff0c8" opacity="0.8"/>
+  <path d="M448 404 L451.12 413.88 L461 417 L451.12 420.12 L448 430 L444.88 420.12 L435 417 L444.88 413.88 Z" fill="#fff0c8" opacity="0.8"/>
   <path d="M440 70 L442.6 78.4 L451 81 L442.6 83.6 L440 92 L437.4 83.6 L429 81 L437.4 78.4 Z" fill="#fff0c8" opacity="0.6"/>
 
   <!-- gold frame -->

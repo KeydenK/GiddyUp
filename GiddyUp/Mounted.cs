@@ -220,7 +220,7 @@ internal sealed unsafe class Mounted : IDisposable
         if (target->ObjectKind != FFXIVClientStructs.FFXIV.Client.Game.Object.ObjectKind.BattleNpc
             || !ActionManager.CanUseActionOnTarget(7, target) || target->IsDead())
             return;
-        _p.Range.Ensure();
+        _p.Range.Recheck(); // picks again from the cached list: newly unlocked actions count
         _enemy = target;
         _dismountTries = 0;
         Plugin.Info($"Enemy targeted; attack range {_p.Range.Yalms:0} y ({_p.Range.ActionName})");

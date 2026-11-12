@@ -63,6 +63,16 @@ internal sealed unsafe class AttackRange
             Candidates(player->ClassJob);
     }
 
+    /// <summary>
+    /// Picks again from the cached candidates (a dozen or so; microseconds), e.g. when you target an enemy: an action
+    /// unlocked by a quest without a level-up counts right away. The game-data scan itself is never redone.
+    /// </summary>
+    internal void Recheck()
+    {
+        _final = false;
+        Ensure();
+    }
+
     /// <summary>Recomputes if your job or level changed (cheap compare otherwise). Call from the game thread.</summary>
     internal void Ensure()
     {

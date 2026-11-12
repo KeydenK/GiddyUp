@@ -14,6 +14,8 @@ internal sealed unsafe class ConfigWindow : Window
 {
     private const float ContentWidth = 440;
     private readonly Plugin _plugin;
+    private long _depsCheckedAt = long.MinValue / 2;
+    private bool _beeline;
 
     public ConfigWindow(Plugin plugin)
         : base("Giddy Up###GiddyUpConfig", ImGuiWindowFlags.AlwaysAutoResize | ImGuiWindowFlags.NoCollapse)
@@ -77,6 +79,19 @@ internal sealed unsafe class ConfigWindow : Window
 
         StatusLine(ImGuiColors.DalamudGrey, FontAwesomeIcon.Crosshairs,
                    $"Your attack range: {_plugin.Range.Yalms:0} y ({_plugin.Range.ActionName})");
+        // Listing installed plugins allocates: once a second, not every frame.
+        if (Environment.TickCount64 - _depsCheckedAt > 1000)
+        {
+            _depsCheckedAt = Environment.TickCount64;
+            _beeline = Plugin.PluginInterface.InstalledPlugins.Any(p => p.InternalName == "Beeline" && p.IsLoaded);
+        }
+        if (_beeline)
+        {
+            StatusLine(ImGuiColors.HealerGreen, FontAwesomeIcon.Link, "Beeline found");
+            Help("During Beeline trips, Beeline decides when to mount (it knows the route) and Giddy Up handles Sprint, "
+               + "Peloton and dismounting. Beeline's learned speeds are used here too (Advanced tab), so they're not "
+               + "measured twice.");
+        }
         if (_plugin.Link.TripActive)
             StatusLine(ImGuiColors.DalamudYellow, FontAwesomeIcon.Route, "Beeline trip: Beeline decides mounting, Giddy Up the rest");
         if (!_plugin.ActionDismount.HookWorks)

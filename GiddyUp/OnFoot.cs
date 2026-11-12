@@ -114,6 +114,10 @@ internal sealed unsafe class OnFoot : IDisposable
     {
         switch (flag)
         {
+            case ConditionFlag.Casting when value:
+                _castStartTarget = (nint)TargetSystem.Instance()->Target; // already targeted when the cast began
+                _cancelSent = 0;
+                break;
             case ConditionFlag.Mounted or ConditionFlag.RidingPillion when value:
                 if (_mountReason != null)
                     Plugin.Info($"Mounted ({_mountReason} done)");
@@ -211,6 +215,7 @@ internal sealed unsafe class OnFoot : IDisposable
         }
 
         _p.Range.Ensure(); // one compare unless your job or level changed
+        CancelSummonForEnemy(now);
 
         // How you're moving (flat distance over the last slice).
         var pos = player->Position;
@@ -323,6 +328,32 @@ internal sealed unsafe class OnFoot : IDisposable
             Plugin.Info(pelotonLeft > 0 ? "Peloton renewed" : sprintLeft > 0 ? "Peloton (taking over from Sprint)" : "Peloton");
             Wait(pelotonLeft > 0 ? 0 : Game.PelotonStatus, now);
         }
+    }
+
+    private nint _castStartTarget;
+    private int _cancelSent;
+    private long _cancelSentAt;
+    private const int CancelCastCommand = 105; // the game's own "cancel cast" command (what it sends when you cancel one)
+
+    /// <summary>
+    /// A mount is being summoned (by Giddy Up or by you) and you target an enemy you hadn't targeted when the summon
+    /// began: cancel the summon, you're about to fight. Only with "dismount for an enemy" on (same intent). One flag
+    /// read per tick; the rest only during a summon.
+    /// </summary>
+    private void CancelSummonForEnemy(long now)
+    {
+        if (!Config.DismountOnEnemy || !Plugin.Condition[ConditionFlag.Casting] || _cancelSent >= 3 || now - _cancelSentAt < 300)
+            return;
+        var am = ActionManager.Instance();
+        var summoning = am->CastActionType == ActionType.Mount
+                        || (am->CastActionType == ActionType.GeneralAction && am->CastActionId == Game.MountRoulette);
+        if (!summoning || (nint)TargetSystem.Instance()->Target == _castStartTarget || !EnemyTargeted())
+            return;
+        FFXIVClientStructs.FFXIV.Client.Game.GameMain.ExecuteCommand(CancelCastCommand, 0, 0, 0, 0);
+        _cancelSent++;
+        _cancelSentAt = now;
+        _mountReason = null; // and don't summon again
+        Plugin.Info("Mount summon cancelled: you targeted an enemy");
     }
 
     /// <summary>Your target is something you could attack (as the game decides: auto-attack would work on it).</summary>

@@ -64,7 +64,7 @@ internal sealed unsafe class ConfigWindow : Window
             {
                 Mounted.State.Approaching => $"Mounted: enemy at {m.Gap:0} y, dismounting at {m.DismountAt:0} y",
                 Mounted.State.NoSight     => "Mounted: enemy in range, waiting for line of sight",
-                Mounted.State.WaitingStill => "Flying: enemy targeted, dismounting once you stop moving",
+                Mounted.State.WaitingStill => "Mounted: enemy targeted, dismounting once you stop moving",
                 _                         => "Mounted",
             });
         }
@@ -194,6 +194,9 @@ internal sealed unsafe class ConfigWindow : Window
             Check("Flying: wait until you stop moving", () => Config.FlyDismountWhenStill, v => Config.FlyDismountWhenStill = v,
                   "In the air, Dismount first lands you, and moving stops that landing. With this on, Giddy Up dismounts "
                 + "as soon as you hold still (it doesn't forget meanwhile). Off: it presses Dismount anyway when in range.");
+            Check("Riding: wait until you stop moving", () => Config.RideDismountWhenStill, v => Config.RideDismountWhenStill = v,
+                  "On the ground, Giddy Up dismounts only once you hold still (it doesn't forget meanwhile). Off: as "
+                + "soon as the enemy is in range, even while you move.");
             ImGui.Unindent();
         }
     }

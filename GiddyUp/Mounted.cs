@@ -176,8 +176,8 @@ internal sealed unsafe class Mounted : IDisposable
             return;
         var flying = Plugin.Condition[ConditionFlag.InFlight];
 
-        // Flying, the landing stops if you keep moving: optionally wait until you stop.
-        if (flying && Config.FlyDismountWhenStill && !IsStill(player, now))
+        // Optionally wait until you stop moving: flying (moving stops the landing) and riding have their own setting.
+        if ((flying ? Config.FlyDismountWhenStill : Config.RideDismountWhenStill) && !IsStill(player, now))
         {
             Now = State.WaitingStill;
             return;
@@ -233,7 +233,7 @@ internal sealed unsafe class Mounted : IDisposable
         DoDismount(now, range, lead, flying);
     }
 
-    /// <summary>Flying, are you holding still? (Moved less than a fraction of your own running speed over 0.25 s.)</summary>
+    /// <summary>Are you holding still? (Moved less than a fraction of your own running speed over 0.25 s.)</summary>
     private bool IsStill(FFXIVClientStructs.FFXIV.Client.Game.Character.BattleChara* player, long now)
     {
         if (now - _stillAt < 250)

@@ -1,42 +1,67 @@
 namespace GiddyUp;
 
-internal enum MoveMode { Run, Sprint, Jog, Peloton, Ride, Fly }
+internal enum MoveMode { Run, Sprint, Jog, Peloton }
 
 /// <summary>
-/// Your real speeds, learned while you play. Every decision uses these, never fixed numbers (the defaults in the
-/// configuration are only where learning starts).
+/// Your real speeds and timings, learned while you play. Every decision uses these, never fixed numbers (the defaults
+/// in the configuration are only where learning starts).
 ///
-/// When Beeline is installed it is the one that learns, and Giddy Up reads its numbers instead of measuring the
-/// same thing twice. (Beeline's side of that link comes in its next release; until then Giddy Up learns alone.)
+/// When Beeline is installed, every speed it has measured comes from it (it measures on clean, straight vnavmesh
+/// moves) and Giddy Up doesn't measure that one again; Giddy Up learns the rest itself, plus what only it uses
+/// (landing, getting off, action delay).
 /// </summary>
 internal sealed class Speeds
 {
     private const int SlicesPerSample = 30; // 3 s of 10 Hz slices
+    private const int Modes = 4;
     private readonly Plugin _p;
-    private readonly float[][] _slices = new float[6][];
-    private readonly int[] _count = new int[6];
+    private readonly float[][] _slices = new float[Modes][];
+    private readonly int[] _count = new int[Modes];
+    private readonly bool[] _fromBeeline = new bool[Modes];
 
     public Speeds(Plugin p)
     {
         _p = p;
-        for (var i = 0; i < _slices.Length; i++)
+        for (var i = 0; i < Modes; i++)
             _slices[i] = new float[SlicesPerSample];
     }
 
     private Configuration Config => _p.Config;
 
-    /// <summary>False while another source (Beeline) provides the speeds: then nothing is measured here.</summary>
-    internal bool LearnHere => true;
+    internal bool FromBeeline(MoveMode mode) => _fromBeeline[(int)mode];
 
     internal float Get(MoveMode mode) => mode switch
     {
-        MoveMode.Run     => Config.RunSpeed,
-        MoveMode.Sprint  => Config.SprintSpeed,
-        MoveMode.Jog     => Config.JogSpeed,
-        MoveMode.Peloton => Config.PelotonSpeed,
-        MoveMode.Ride    => Config.RideSpeed,
-        _                => Config.FlySpeed,
+        MoveMode.Run    => Config.RunSpeed,
+        MoveMode.Sprint => Config.SprintSpeed,
+        MoveMode.Jog    => Config.JogSpeed,
+        _               => Config.PelotonSpeed,
     };
+
+    /// <summary>Beeline's learned speeds (null = no Beeline): used for each speed it has measured at least once.</summary>
+    internal void SetExternal(Dictionary<string, float>? d)
+    {
+        Array.Clear(_fromBeeline);
+        if (d == null)
+            return;
+        void Take(MoveMode mode, string key, Action<float> set)
+        {
+            if (d.TryGetValue(key + "Samples", out var n) && n > 0 && d.TryGetValue(key, out var v) && v is > 1f and < 200f)
+            {
+                set(v);
+                _fromBeeline[(int)mode] = true;
+                _count[(int)mode] = 0;
+            }
+        }
+        Take(MoveMode.Run,     "Run",     v => Config.RunSpeed = v);
+        Take(MoveMode.Sprint,  "Sprint",  v => Config.SprintSpeed = v);
+        Take(MoveMode.Jog,     "Jog",     v => Config.JogSpeed = v);
+        Take(MoveMode.Peloton, "Peloton", v => Config.PelotonSpeed = v);
+        if (d.TryGetValue("SprintSeconds", out var sec))
+            SeenSprintDuration(sec);
+        Plugin.Info("Speeds from Beeline: " + string.Join(", ", Enum.GetValues<MoveMode>().Where(FromBeeline)));
+        _p.MarkDirty();
+    }
 
     /// <summary>
     /// One slice of movement (distance over time). Slices well below the speed already known for that mode are
@@ -44,20 +69,19 @@ internal sealed class Speeds
     /// </summary>
     internal void Slice(MoveMode mode, float distance, float seconds)
     {
-        if (!LearnHere || seconds is < 0.03f or > 0.5f)
+        var m = (int)mode;
+        if (_fromBeeline[m] || seconds is < 0.03f or > 0.5f)
             return;
         var speed = distance / seconds;
         if (speed < Get(mode) * 0.5f || speed > 200f)
             return;
-        var m = (int)mode;
         _slices[m][_count[m]++] = speed;
         if (_count[m] < SlicesPerSample)
             return;
         _count[m] = 0;
         // 80th percentile: brief slow-downs (a slight stick tilt, a bump) don't drag the value down.
-        var sorted = (float[])_slices[m].Clone();
-        Array.Sort(sorted);
-        Learn(mode, sorted[(int)(SlicesPerSample * 0.8f)]);
+        Array.Sort(_slices[m]); // the buffer starts over anyway: sort it in place
+        Learn(mode, _slices[m][(int)(SlicesPerSample * 0.8f)]);
     }
 
     /// <summary>Forget partial measurements (the way of moving changed, or you stopped).</summary>
@@ -71,8 +95,6 @@ internal sealed class Speeds
             case MoveMode.Sprint:  Config.SprintSpeed  = Blend(Config.SprintSpeed,  Config.SprintSamples++,  speed); break;
             case MoveMode.Jog:     Config.JogSpeed     = Blend(Config.JogSpeed,     Config.JogSamples++,     speed); break;
             case MoveMode.Peloton: Config.PelotonSpeed = Blend(Config.PelotonSpeed, Config.PelotonSamples++, speed); break;
-            case MoveMode.Ride:    Config.RideSpeed    = Blend(Config.RideSpeed,    Config.RideSamples++,    speed); break;
-            case MoveMode.Fly:     Config.FlySpeed     = Blend(Config.FlySpeed,     Config.FlySamples++,     speed); break;
         }
         Plugin.Info($"Learned {mode}: {speed:0.0} y/s -> {Get(mode):0.0}");
         _p.MarkDirty();

@@ -85,6 +85,8 @@ internal sealed unsafe class ActionDismount : IDisposable
                     var height = flying ? Mounted.HeightAboveLanding() : 0f;
                     var expected = flying ? _p.Speeds.LandingSeconds(float.IsNaN(height) ? 0f : height) : _p.Config.GetOffSeconds;
                     _dismountSentAt = now;
+                    _p.Mounted.NoteDismount(now); // its landing teaches the landing timings
+                    _p.Link.DismountedForCombat();
                     _dismountExpectedMs = (long)((expected * 2f + 1f) * 1000);
                     if (_p.Config.ReplayAction)
                         Queue(type, id, target, extra, mode, combo, expected * 2f + 1f);
@@ -132,10 +134,15 @@ internal sealed unsafe class ActionDismount : IDisposable
         return true;
     }
 
+    /// <summary>The action's target; "no id" (hotbar presses) means your current target, as the game does it.</summary>
     private static GameObject* Find(ulong id)
     {
         if (id == 0xE0000000 || id == 0)
-            return null;
+        {
+            var ts = FFXIVClientStructs.FFXIV.Client.Game.Control.TargetSystem.Instance();
+            var t = ts->GetHardTarget();
+            return t != null ? t : ts->GetSoftTarget();
+        }
         var obj = Plugin.ObjectTable.SearchById(id);
         return obj == null ? null : (GameObject*)obj.Address;
     }
@@ -149,6 +156,7 @@ internal sealed unsafe class ActionDismount : IDisposable
         _timeout = timeout;
         if (_queued) return;
         _queued = true;
+        _offAt = 0;
         Plugin.Framework.Update += OnUpdate;
     }
 
@@ -159,32 +167,54 @@ internal sealed unsafe class ActionDismount : IDisposable
         Plugin.Framework.Update -= OnUpdate;
     }
 
-    internal void OnCondition(ConditionFlag flag, bool value)
-    {
-        // Nothing to do here: the replay waits on the next frame after "mounted" ends (see OnUpdate).
-    }
+    internal void Reset() => StopReplay();
+
+    private long _offAt, _triedAt; // when you were first seen off the mount; last replay attempt
 
     private void OnUpdate(IFramework framework)
     {
-        if ((Environment.TickCount64 - _queuedAt) / 1000f > _timeout)
+        var now = Environment.TickCount64;
+        var c = Plugin.Condition;
+        var stillOn = c[ConditionFlag.Mounted] || c[ConditionFlag.Jumping61] || c[ConditionFlag.MountOrOrnamentTransition];
+        if (stillOn)
         {
-            Plugin.Info($"Gave up on {Game.ActionName(_id)}: still on the mount after {_timeout:0.0} s");
-            StopReplay();
+            _offAt = 0;
+            if ((now - _queuedAt) / 1000f > _timeout)
+            {
+                Plugin.Info($"Gave up on {Game.ActionName(_id)}: still on the mount after {_timeout:0.0} s");
+                StopReplay();
+            }
             return;
         }
-        var c = Plugin.Condition;
-        if (c[ConditionFlag.Mounted] || c[ConditionFlag.Jumping61] || c[ConditionFlag.MountOrOrnamentTransition])
+        // Off the mount. Right after getting off, the game can still refuse actions for a moment (animation lock):
+        // try again every 100 ms, for up to your measured get-off time plus a second.
+        if (_offAt == 0)
+        {
+            _offAt = now;
+            _triedAt = 0;
+        }
+        if (now - _triedAt < 100)
             return;
-        StopReplay();
+        _triedAt = now;
+        bool ok;
         _replaying = true;
         try
         {
-            var ok = ActionManager.Instance()->UseAction(_type, _id, _target, _extra, _mode, _combo);
-            Plugin.Info($"{Game.ActionName(_id)} {(ok ? "used" : "refused by the game")} after dismounting");
+            ok = ActionManager.Instance()->UseAction(_type, _id, _target, _extra, _mode, _combo);
         }
         finally
         {
             _replaying = false;
+        }
+        if (ok)
+        {
+            Plugin.Info($"{Game.ActionName(_id)} used after dismounting");
+            StopReplay();
+        }
+        else if (now - _offAt > (_p.Config.GetOffSeconds + 1f) * 1000)
+        {
+            Plugin.Info($"{Game.ActionName(_id)} refused by the game after dismounting");
+            StopReplay();
         }
     }
 }

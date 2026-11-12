@@ -19,6 +19,8 @@ public sealed class Configuration : Dalamud.Configuration.IPluginConfiguration
     public bool MountAfterGathering { get; set; } = true;
     /// <summary>Wait until you start moving (default), or mount right away.</summary>
     public MountTiming MountWhen { get; set; } = MountTiming.WhenMoving;
+    /// <summary>A pending mount (after a fight, a zone change...) is dropped if you haven't moved off within this time.</summary>
+    public float MountForgetSeconds { get; set; } = 60f;
     public MountChoice MountKind { get; set; } = MountChoice.Roulette;
     public uint MountId { get; set; }
 
@@ -40,10 +42,6 @@ public sealed class Configuration : Dalamud.Configuration.IPluginConfiguration
     public int JogSamples { get; set; }
     public float PelotonSpeed { get; set; } = 7.2f;
     public int PelotonSamples { get; set; }
-    public float RideSpeed { get; set; } = 9f;
-    public int RideSamples { get; set; }
-    public float FlySpeed { get; set; } = 11f;
-    public int FlySamples { get; set; }
     /// <summary>Dismounting while flying, the character first descends to the ground: how fast (yalms per second, straight down).</summary>
     public float DescentSpeed { get; set; } = 10f;
     public int DescentSamples { get; set; }
@@ -57,8 +55,8 @@ public sealed class Configuration : Dalamud.Configuration.IPluginConfiguration
     public void ResetLearned()
     {
         RunSpeed = 6f; SprintSpeed = 7.8f; SprintSeconds = 20f; JogSpeed = 7.2f; PelotonSpeed = 7.2f;
-        RideSpeed = 9f; FlySpeed = 11f; DescentSpeed = 10f; GetOffSeconds = 1f; ActionLagSeconds = 0.3f;
-        RunSamples = SprintSamples = JogSamples = PelotonSamples = RideSamples = FlySamples = DescentSamples = GetOffSamples = ActionLagSamples = 0;
+        DescentSpeed = 10f; GetOffSeconds = 1f; ActionLagSeconds = 0.3f;
+        RunSamples = SprintSamples = JogSamples = PelotonSamples = DescentSamples = GetOffSamples = ActionLagSamples = 0;
     }
 
     /// <summary>Write what Giddy Up does (and why) to the Dalamud log at Information level. Always on in dev builds.</summary>

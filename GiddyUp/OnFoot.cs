@@ -26,7 +26,7 @@ internal sealed unsafe class OnFoot : IDisposable
     private string? _mountReason;
     private int _mountAttempts;
     private long _mountTriedAt;
-    private bool _territoryAllowsMount;
+    private long _mountWantedAt;
 
     // After using Sprint/Peloton/a mount, its effect takes a moment to show up (server round trip): don't decide
     // again until it shows, or 2 s.
@@ -48,7 +48,7 @@ internal sealed unsafe class OnFoot : IDisposable
     internal void Refresh()
     {
         var c = Plugin.Condition;
-        var want = Plugin.ClientState.IsLoggedIn && !Plugin.ClientState.IsPvP
+        var want = _p.LoggedIn && !Plugin.ClientState.IsPvP
                    && !Game.IsMounted && !c[ConditionFlag.InCombat] && !c[ConditionFlag.BetweenAreas]
                    && (Config.AutoSprint || Config.KeepPeloton || _mountReason != null);
         if (want) Start();
@@ -73,10 +73,26 @@ internal sealed unsafe class OnFoot : IDisposable
         Plugin.Framework.Update -= OnUpdate;
     }
 
-    internal void OnTerritory(uint territory)
+    internal void OnTerritory(uint territory) => _hasLastPos = false;
+
+    internal void Reset()
     {
-        _territoryAllowsMount = Plugin.Data.GetExcelSheet<Lumina.Excel.Sheets.TerritoryType>().TryGetRow(territory, out var t) && t.Mount;
+        _mountReason = null;
+        _waiting = false;
         _hasLastPos = false;
+        Stop();
+    }
+
+    /// <summary>
+    /// Mounts allowed here: the zone allows them (read at the moment, not cached, so the order of zone-change events
+    /// doesn't matter), and you're not in a duty or PvP.
+    /// </summary>
+    private static bool MountAllowedHere()
+    {
+        var c = Plugin.Condition;
+        if (c[ConditionFlag.BoundByDuty] || c[ConditionFlag.BoundByDuty56] || c[ConditionFlag.BoundByDuty95] || Plugin.ClientState.IsPvP)
+            return false;
+        return Plugin.Data.GetExcelSheet<Lumina.Excel.Sheets.TerritoryType>().TryGetRow(Plugin.ClientState.TerritoryType, out var t) && t.Mount;
     }
 
     internal void OnCondition(ConditionFlag flag, bool value)
@@ -100,17 +116,27 @@ internal sealed unsafe class OnFoot : IDisposable
                 if (value) _mountReason = null;
                 else if (Config.MountAfterGathering) WantMount("after gathering");
                 break;
+            // Talking to someone or using something: you're busy here, forget the pending mount.
+            case ConditionFlag.OccupiedInEvent or ConditionFlag.OccupiedInQuestEvent or ConditionFlag.OccupiedSummoningBell when value:
+                if (_mountReason != null)
+                    Plugin.Info($"Not mounting ({_mountReason}): you're busy here");
+                _mountReason = null;
+                break;
         }
     }
 
+    /// <summary>A Beeline trip started: Beeline decides mounting for the trip.</summary>
+    internal void OnTripStarted() => _mountReason = null;
+
     private void WantMount(string reason)
     {
-        var c = Plugin.Condition;
-        if (!_territoryAllowsMount || c[ConditionFlag.BoundByDuty] || c[ConditionFlag.BoundByDuty56] || c[ConditionFlag.BoundByDuty95]
-            || Plugin.ClientState.IsPvP || Game.IsMounted)
+        if (_p.Link.TripActive)
+            return; // Beeline decides mounting during its trips
+        if (Game.IsMounted || !MountAllowedHere())
             return;
         _mountReason = reason;
         _mountAttempts = 0;
+        _mountWantedAt = Environment.TickCount64;
         Plugin.Info($"Will mount ({reason}){(Config.MountWhen == MountTiming.WhenMoving ? " when you start moving" : "")}");
     }
 
@@ -141,6 +167,8 @@ internal sealed unsafe class OnFoot : IDisposable
             _hasLastPos = false;
             return;
         }
+
+        _p.Range.Ensure(); // one compare unless your job or level changed
 
         // How you're moving (flat distance over the last slice).
         var pos = player->Position;
@@ -187,17 +215,34 @@ internal sealed unsafe class OnFoot : IDisposable
                 return;
         }
 
+        // A wish to mount that waited too long (you stayed around) is dropped: walking to a vendor 10 minutes after a
+        // fight shouldn't summon a mount.
+        if (_mountReason != null && (now - _mountWantedAt) / 1000f > Config.MountForgetSeconds)
+        {
+            Plugin.Info($"Not mounting ({_mountReason}): you didn't move off for {Config.MountForgetSeconds:0} s");
+            _mountReason = null;
+            _p.Refresh(); // nothing else to watch for? then stop ticking
+            if (!_watching)
+                return;
+        }
+
+        // Standing still and no mount to summon right away: nothing to decide.
+        var reacted = _movingFor >= Config.MoveSeconds;
+        if (!reacted && !(_mountReason != null && Config.MountWhen == MountTiming.RightAway))
+            return;
+
         var c = Plugin.Condition;
         if (walking || Game.IsMounted || c[ConditionFlag.InCombat] || Game.Busy() || _p.ActionDismount.ReplayPending)
             return;
-
-        var reacted = _movingFor >= Config.MoveSeconds;
 
         // 1. Mount, if we want to and the game allows it right here, right now.
         var mountReady = _mountReason != null && Game.Ready(ActionType.GeneralAction, Game.MountRoulette);
         if (mountReady && (reacted || Config.MountWhen == MountTiming.RightAway))
         {
-            TryMount(now);
+            if (MountAllowedHere()) // checked again: a duty may have started since
+                TryMount(now);
+            else
+                _mountReason = null;
             return;
         }
         if (!reacted)
@@ -207,7 +252,8 @@ internal sealed unsafe class OnFoot : IDisposable
         //    summoned (mounting ends Sprint and Jog anyway).
         var current = Math.Max(Config.RunSpeed, Math.Max(pelotonLeft > 0 ? Config.PelotonSpeed : 0, jogLeft > 0 ? Config.JogSpeed : 0));
         if (Config.AutoSprint && !mountReady && sprintLeft <= 0 && Config.SprintSpeed > current
-            && Game.Ready(ActionType.GeneralAction, Game.Sprint) && Game.Use(ActionType.GeneralAction, Game.Sprint))
+            && Game.Ready(ActionType.GeneralAction, Game.Sprint) && !_p.Link.BeelineWillMount()
+            && Game.Use(ActionType.GeneralAction, Game.Sprint))
         {
             Plugin.Info($"Sprint ({Config.SprintSpeed:0.0} y/s beats {current:0.0})");
             Wait(Game.SprintStatus, now);
@@ -225,7 +271,8 @@ internal sealed unsafe class OnFoot : IDisposable
             return;
         if (jogLeft > 0 && sprintLeft <= 0 && Config.JogSpeed >= Config.PelotonSpeed)
             return;
-        if (Game.Ready(ActionType.Action, Game.PelotonAction) && Game.Use(ActionType.Action, Game.PelotonAction))
+        if (Game.Ready(ActionType.Action, Game.PelotonAction) && !_p.Link.BeelineWillMount()
+            && Game.Use(ActionType.Action, Game.PelotonAction))
         {
             Plugin.Info(pelotonLeft > 0 ? "Peloton renewed" : sprintLeft > 0 ? "Peloton (taking over from Sprint)" : "Peloton");
             Wait(pelotonLeft > 0 ? 0 : Game.PelotonStatus, now);

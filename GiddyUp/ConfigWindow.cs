@@ -57,8 +57,14 @@ internal sealed unsafe class ConfigWindow : Window
         }
         if (Game.IsMounted)
         {
-            var s = _plugin.Mounted.Status;
-            StatusLine(ImGuiColors.HealerGreen, FontAwesomeIcon.Horse, s.Length > 0 ? $"Mounted: {s}" : "Mounted");
+            var m = _plugin.Mounted;
+            StatusLine(ImGuiColors.HealerGreen, FontAwesomeIcon.Horse, m.Now switch
+            {
+                Mounted.State.Approaching => $"Mounted: enemy at {m.Gap:0} y, dismounting at {m.DismountAt:0} y",
+                Mounted.State.NoLanding   => "Mounted: enemy targeted, nowhere to land below you",
+                Mounted.State.NoSight     => "Mounted: enemy in range, waiting for line of sight",
+                _                         => "Mounted",
+            });
         }
         else if (_plugin.OnFoot.Watching)
         {
@@ -69,9 +75,10 @@ internal sealed unsafe class ConfigWindow : Window
         else
             StatusLine(ImGuiColors.DalamudGrey, FontAwesomeIcon.PauseCircle, "Resting (in combat, or nothing to do)");
 
-        _plugin.Range.Ensure();
         StatusLine(ImGuiColors.DalamudGrey, FontAwesomeIcon.Crosshairs,
                    $"Your attack range: {_plugin.Range.Yalms:0} y ({_plugin.Range.ActionName})");
+        if (_plugin.Link.TripActive)
+            StatusLine(ImGuiColors.DalamudYellow, FontAwesomeIcon.Route, "Beeline trip: Beeline decides mounting, Giddy Up the rest");
         if (!_plugin.ActionDismount.HookWorks)
             StatusLine(ImGuiColors.DalamudRed, FontAwesomeIcon.ExclamationTriangle,
                        "\"Dismount when using an action\" couldn't start (see /xllog)");
@@ -90,10 +97,8 @@ internal sealed unsafe class ConfigWindow : Window
         ImGui.SetNextItemWidth(160 * ImGuiHelpers.GlobalScale);
         var move = Config.MoveSeconds;
         if (ImGui.SliderFloat("Moving for at least", ref move, 0f, 2f, "%.1f s"))
-        {
             Config.MoveSeconds = move;
-            _plugin.SaveConfig();
-        }
+        SaveWhenReleased();
         Help("How long you must have been moving before Giddy Up reacts (Sprint, Peloton, or a mount 'when you start "
            + "moving'), so a small step doesn't spend them.");
     }
@@ -107,13 +112,20 @@ internal sealed unsafe class ConfigWindow : Window
 
         ImGui.SetNextItemWidth(200 * ImGuiHelpers.GlobalScale);
         var when = (int)Config.MountWhen;
-        if (ImGui.Combo("When", ref when, ["when you start moving", "right away"]))
+        if (ImGui.Combo("When", ref when, WhenItems))
         {
             Config.MountWhen = (MountTiming)when;
             _plugin.SaveConfig();
         }
         Help("'When you start moving': you keep moving while the mount is summoned, and standing around (at a vendor, "
            + "waiting for a friend) doesn't put you on a mount for nothing.");
+        ImGui.SetNextItemWidth(160 * ImGuiHelpers.GlobalScale);
+        var forget = Config.MountForgetSeconds;
+        if (ImGui.SliderFloat("Forget it after", ref forget, 10f, 300f, "%.0f s"))
+            Config.MountForgetSeconds = forget;
+        SaveWhenReleased();
+        Help("If you don't move off within this time (you stayed to sell, craft, chat...), Giddy Up doesn't mount you "
+           + "later. Talking to someone also cancels it.");
         DrawMountPicker();
     }
 
@@ -129,7 +141,8 @@ internal sealed unsafe class ConfigWindow : Window
             Check("Then use the action", () => Config.ReplayAction, v => Config.ReplayAction = v,
                   "Once you're off, Giddy Up uses the action you pressed. Turn this off if a rotation plugin plays your "
                 + "actions for you: you'll just be dismounted and it takes over. Either way, if any other action is used "
-                + "first after you land, Giddy Up doesn't use yours on top of it.");
+                + "first after you land, Giddy Up doesn't use yours on top of it.\n\nNote: Giddy Up can't tell your key "
+                + "presses from a rotation plugin's, so a rotation plugin that acts while you're mounted would dismount you.");
             ImGui.Unindent();
         }
         Check("Dismount for an enemy you target", () => Config.DismountOnEnemy, v => Config.DismountOnEnemy = v);
@@ -138,7 +151,7 @@ internal sealed unsafe class ConfigWindow : Window
             ImGui.Indent();
             ImGui.SetNextItemWidth(260 * ImGuiHelpers.GlobalScale);
             var mode = (int)Config.EnemyMode;
-            if (ImGui.Combo("##enemymode", ref mode, ["once it's within your attack range", "as soon as you target it"]))
+            if (ImGui.Combo("##enemymode", ref mode, EnemyItems))
             {
                 Config.EnemyMode = (EnemyDismount)mode;
                 _plugin.SaveConfig();
@@ -159,12 +172,11 @@ internal sealed unsafe class ConfigWindow : Window
         {
             if (table)
             {
-                Row("Running",            $"{Config.RunSpeed:0.0} y/s", Config.RunSamples);
-                Row("Sprint",             $"{Config.SprintSpeed:0.0} y/s for {Config.SprintSeconds:0} s", Config.SprintSamples);
-                Row("Jog (after Sprint)", $"{Config.JogSpeed:0.0} y/s", Config.JogSamples);
-                Row("Peloton",            $"{Config.PelotonSpeed:0.0} y/s", Config.PelotonSamples);
-                Row("Riding",             $"{Config.RideSpeed:0.0} y/s", Config.RideSamples);
-                Row("Flying",             $"{Config.FlySpeed:0.0} y/s", Config.FlySamples);
+                var sp = _plugin.Speeds;
+                Row("Running",            $"{Config.RunSpeed:0.0} y/s", Config.RunSamples, sp.FromBeeline(MoveMode.Run));
+                Row("Sprint",             $"{Config.SprintSpeed:0.0} y/s for {Config.SprintSeconds:0} s", Config.SprintSamples, sp.FromBeeline(MoveMode.Sprint));
+                Row("Jog (after Sprint)", $"{Config.JogSpeed:0.0} y/s", Config.JogSamples, sp.FromBeeline(MoveMode.Jog));
+                Row("Peloton",            $"{Config.PelotonSpeed:0.0} y/s", Config.PelotonSamples, sp.FromBeeline(MoveMode.Peloton));
                 Row("Landing (descent)",  $"{Config.DescentSpeed:0.0} y/s down", Config.DescentSamples);
                 Row("Getting off",        $"{Config.GetOffSeconds:0.00} s", Config.GetOffSamples);
                 Row("Action delay",       $"{Config.ActionLagSeconds * 1000:0} ms", Config.ActionLagSamples);
@@ -183,7 +195,8 @@ internal sealed unsafe class ConfigWindow : Window
 
     // ---------------- Mount picker ----------------
 
-    private List<(uint Id, string Name)>? _mounts;
+    private List<(uint Id, string Name, string Label)>? _mounts;
+    private string _searchHint = "";
     private string _mountFilter = "";
     private uint _labelFor = uint.MaxValue;
     private string _label = "Mount Roulette";
@@ -221,21 +234,22 @@ internal sealed unsafe class ConfigWindow : Window
                     var ps = FFXIVClientStructs.FFXIV.Client.Game.UI.PlayerState.Instance();
                     _mounts = Plugin.Data.GetExcelSheet<Lumina.Excel.Sheets.Mount>()
                         .Where(m => m.RowId != 0 && !m.Singular.IsEmpty && ps != null && ps->IsMountUnlocked(m.RowId))
-                        .Select(m => (m.RowId, MountName(m.RowId)))
+                        .Select(m => MountName(m.RowId) is var n ? (m.RowId, n, $"{n}##m{m.RowId}") : default) // labels built once
                         .OrderBy(m => m.Item2, StringComparer.OrdinalIgnoreCase)
                         .ToList();
                     _mountFilter = "";
+                    _searchHint = $"Search your {_mounts.Count} mounts";
                 }
                 if (ImGui.Selectable("Mount Roulette", Config.MountKind != MountChoice.Specific))
                     SetMount(MountChoice.Roulette, 0);
                 ImGui.Separator();
                 ImGui.SetNextItemWidth(-1);
-                ImGui.InputTextWithHint("##mountsearch", $"Search your {_mounts.Count} mounts", ref _mountFilter, 64);
-                foreach (var (id, name) in _mounts)
+                ImGui.InputTextWithHint("##mountsearch", _searchHint, ref _mountFilter, 64);
+                foreach (var (id, name, label) in _mounts)
                 {
                     if (_mountFilter.Length > 0 && !name.Contains(_mountFilter, StringComparison.OrdinalIgnoreCase))
                         continue;
-                    if (ImGui.Selectable($"{name}##m{id}", Config.MountKind == MountChoice.Specific && Config.MountId == id))
+                    if (ImGui.Selectable(label, Config.MountKind == MountChoice.Specific && Config.MountId == id))
                         SetMount(MountChoice.Specific, id);
                 }
             }
@@ -270,7 +284,17 @@ internal sealed unsafe class ConfigWindow : Window
         ImGuiComponents.HelpMarker(text);
     }
 
-    private static void Row(string what, string value, int samples)
+    private static readonly string[] WhenItems = ["when you start moving", "right away"];
+    private static readonly string[] EnemyItems = ["once it's within your attack range", "as soon as you target it"];
+
+    /// <summary>Sliders: save once you let go, not on every frame while dragging.</summary>
+    private void SaveWhenReleased()
+    {
+        if (ImGui.IsItemDeactivatedAfterEdit())
+            _plugin.SaveConfig();
+    }
+
+    private static void Row(string what, string value, int samples, bool fromBeeline = false)
     {
         ImGui.TableNextRow();
         ImGui.TableNextColumn();
@@ -279,7 +303,7 @@ internal sealed unsafe class ConfigWindow : Window
         ImGui.TextUnformatted(value);
         ImGui.TableNextColumn();
         using (ImRaii.PushColor(ImGuiCol.Text, ImGuiColors.DalamudGrey))
-            ImGui.TextUnformatted(samples == 0 ? "default" : samples == 1 ? "1 sample" : $"{samples} samples");
+            ImGui.TextUnformatted(fromBeeline ? "from Beeline" : samples == 0 ? "default" : samples == 1 ? "1 sample" : $"{samples} samples");
     }
 
     private static void StatusLine(Vector4 color, FontAwesomeIcon icon, string text)

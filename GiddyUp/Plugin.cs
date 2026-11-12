@@ -39,6 +39,7 @@ public sealed class Plugin : IDalamudPlugin
     internal readonly OnFoot OnFoot;
     internal readonly Mounted Mounted;
     internal readonly ActionDismount ActionDismount;
+    internal readonly Link Link;
 
     private readonly WindowSystem _windows = new("GiddyUp");
     private readonly ConfigWindow _configWindow;
@@ -54,6 +55,7 @@ public sealed class Plugin : IDalamudPlugin
         OnFoot         = new OnFoot(this);
         Mounted        = new Mounted(this);
         ActionDismount = new ActionDismount(this);
+        Link           = new Link(this);
 
         _configWindow = new ConfigWindow(this);
         _windows.AddWindow(_configWindow);
@@ -65,7 +67,6 @@ public sealed class Plugin : IDalamudPlugin
         Condition.ConditionChange    += OnConditionChange;
         ClientState.TerritoryChanged += OnTerritoryChanged;
         ClientState.ClassJobChanged  += OnClassJobChanged;
-        ClientState.LevelChanged     += OnLevelChanged;
         ClientState.Login            += OnLogin;
         ClientState.Logout           += OnLogout;
 
@@ -74,27 +75,34 @@ public sealed class Plugin : IDalamudPlugin
         // Plugin loaded while already in game.
         Framework.RunOnFrameworkThread(() =>
         {
-            if (!ClientState.IsLoggedIn)
-                return;
-            Range.Invalidate();
-            OnFoot.OnTerritory(ClientState.TerritoryType);
-            Refresh();
+            try
+            {
+                LoggedIn = ClientState.IsLoggedIn;
+                Refresh();
+            }
+            catch (Exception e)
+            {
+                Log.Error(e, $"{Tag} Start-up failed");
+            }
         });
     }
+
+    /// <summary>From the login/logout events (more reliable than IsLoggedIn during the logout event itself).</summary>
+    internal bool LoggedIn { get; private set; }
 
     public void Dispose()
     {
         Condition.ConditionChange    -= OnConditionChange;
         ClientState.TerritoryChanged -= OnTerritoryChanged;
         ClientState.ClassJobChanged  -= OnClassJobChanged;
-        ClientState.LevelChanged     -= OnLevelChanged;
         ClientState.Login            -= OnLogin;
         ClientState.Logout           -= OnLogout;
         Commands.RemoveHandler(Command);
+        Link.Dispose();
         ActionDismount.Dispose();
         Mounted.Dispose();
         OnFoot.Dispose();
-        SaveIfDirty();
+        SaveIfDirty(now: true);
         PluginInterface.UiBuilder.Draw         -= _windows.Draw;
         PluginInterface.UiBuilder.OpenConfigUi -= _configWindow.Toggle;
         PluginInterface.UiBuilder.OpenMainUi   -= _configWindow.Toggle;
@@ -108,14 +116,18 @@ public sealed class Plugin : IDalamudPlugin
         Refresh();
     }
 
-    /// <summary>Learned values changed: saved at the next calm moment (condition change), not on every sample.</summary>
+    /// <summary>Learned values changed: saved at a calm moment (a condition change, at most every 30 s), not per sample.</summary>
     internal void MarkDirty() => _configDirty = true;
 
-    private void SaveIfDirty()
+    private long _savedAt;
+
+    private void SaveIfDirty(bool now = false)
     {
-        if (_configDirty)
-            PluginInterface.SavePluginConfig(Config);
+        if (!_configDirty || (!now && Environment.TickCount64 - _savedAt < 30_000))
+            return;
+        PluginInterface.SavePluginConfig(Config);
         _configDirty = false;
+        _savedAt = Environment.TickCount64;
     }
 
     /// <summary>Arms or disarms the per-frame watchers for the current state.</summary>
@@ -129,7 +141,6 @@ public sealed class Plugin : IDalamudPlugin
     {
         OnFoot.OnCondition(flag, value);
         Mounted.OnCondition(flag, value);
-        ActionDismount.OnCondition(flag, value);
         Refresh();
         SaveIfDirty();
     }
@@ -140,23 +151,27 @@ public sealed class Plugin : IDalamudPlugin
         Refresh();
     }
 
+    // Attack range: the on-foot watcher notices job/level changes itself (one compare per tick) and the game-data scan
+    // runs in the background; these only make sure the right watchers run.
     private void OnClassJobChanged(uint classJobId)
     {
-        Range.Invalidate();
+        Range.Prefetch();
         Refresh();
     }
 
-    private void OnLevelChanged(uint classJobId, uint level) => Range.Invalidate();
-
     private void OnLogin()
     {
-        Range.Invalidate();
+        LoggedIn = true;
         Refresh();
     }
 
     private void OnLogout(int type, int code)
     {
-        SaveIfDirty();
+        LoggedIn = false;
+        OnFoot.Reset();
+        Mounted.Reset();
+        ActionDismount.Reset();
+        SaveIfDirty(now: true);
         Refresh();
     }
 

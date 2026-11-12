@@ -10,9 +10,10 @@ namespace GiddyUp;
 
 /// <summary>
 /// While you're on a mount: dismount for an enemy you target (as soon as you target it, or once it's within your
-/// attack range), learn riding/flying speeds and how long landing takes. Subscribed only while mounted.
+/// attack range), and learn how long landing and getting off take (from any dismount Giddy Up makes).
 ///
-/// Per frame: one compare of the game's target pointer. Only while an enemy is targeted: a distance check.
+/// Subscribed only while mounted with the enemy dismount on. Per frame: one compare of the game's target pointer;
+/// only while an enemy is targeted, a distance check (and 4 times a second, a height/line-of-sight check).
 /// </summary>
 internal sealed unsafe class Mounted : IDisposable
 {
@@ -24,43 +25,50 @@ internal sealed unsafe class Mounted : IDisposable
     private float _closing;          // how fast you're getting closer to the enemy (y/s, smoothed)
     private long _lastFrameAt;
     private long _losCheckedAt;
+    private bool _losBlocked;        // last line-of-sight check said no (kept until the next check)
 
-    private long _dismountAt;        // when we pressed Dismount (0 = we didn't)
+    private long _dismountAt;        // when Giddy Up pressed Dismount (0 = it didn't)
     private bool _dismountInFlight;
-    private float _dismountHeight;   // height above the landing spot when we pressed it
+    private float _dismountHeight;   // height above the landing spot when it was pressed
     private long _touchdownAt;       // "in flight" ended (on the ground, still on the mount)
     private int _dismountTries;
 
     private float _height = float.NaN; // above the spot you'd land on (NaN = can't land here), refreshed 4x/s while needed
     private long _heightAt;
 
-    // Speed sampling at 10 Hz.
-    private long _nextSample, _sampleAt;
-    private Vector3 _samplePos;
-    private bool _hasSample;
-    private MoveMode? _lastMode;
-
     public Mounted(Plugin p) => _p = p;
 
     private Configuration Config => _p.Config;
 
-    /// <summary>For the settings header.</summary>
-    internal string Status { get; private set; } = "";
+    // For the settings header (formatted there, only while the window is open).
+    internal enum State { None, Approaching, NoLanding, NoSight }
+    internal State Now { get; private set; }
+    internal float Gap { get; private set; }
+    internal float DismountAt { get; private set; }
 
     public void Dispose() => Stop();
 
     internal void Refresh()
     {
-        if (Plugin.ClientState.IsLoggedIn && Plugin.Condition[ConditionFlag.Mounted]) Start();
+        if (_p.LoggedIn && Config.DismountOnEnemy && Plugin.Condition[ConditionFlag.Mounted]) Start();
         else Stop();
+    }
+
+    internal void Reset()
+    {
+        Stop();
+        _dismountAt = 0;
+        _touchdownAt = 0;
     }
 
     internal void OnCondition(ConditionFlag flag, bool value)
     {
+        if (_dismountAt == 0)
+            return;
         var now = Environment.TickCount64;
-        if (flag == ConditionFlag.InFlight && !value && _dismountAt != 0 && _dismountInFlight)
+        if (flag == ConditionFlag.InFlight && !value && _dismountInFlight)
             _touchdownAt = now;
-        if (flag == ConditionFlag.Mounted && !value && _dismountAt != 0)
+        if (flag == ConditionFlag.Mounted && !value)
         {
             var took = (now - _dismountAt) / 1000f;
             if (_dismountInFlight && _touchdownAt != 0 && !float.IsNaN(_dismountHeight))
@@ -73,6 +81,18 @@ internal sealed unsafe class Mounted : IDisposable
         }
     }
 
+    /// <summary>
+    /// Giddy Up is pressing Dismount (here or for an action): remember when and from what height, so the landing
+    /// teaches the landing timings.
+    /// </summary>
+    internal void NoteDismount(long now)
+    {
+        _dismountInFlight = Plugin.Condition[ConditionFlag.InFlight];
+        _dismountHeight = _dismountInFlight ? HeightAboveLanding() : 0f;
+        _dismountAt = now;
+        _touchdownAt = 0;
+    }
+
     private void Start()
     {
         if (_watching) return;
@@ -80,10 +100,8 @@ internal sealed unsafe class Mounted : IDisposable
         // An enemy already targeted when you mounted doesn't count (you chose to mount anyway).
         _lastTarget = (nint)TargetSystem.Instance()->Target;
         _enemy = null;
-        _dismountAt = 0;
         _dismountTries = 0;
-        _hasSample = false;
-        Status = "";
+        Now = State.None;
         Plugin.Framework.Update += OnUpdate;
     }
 
@@ -92,9 +110,7 @@ internal sealed unsafe class Mounted : IDisposable
         if (!_watching) return;
         _watching = false;
         _enemy = null;
-        Status = "";
-        if (_lastMode is { } m) _p.Speeds.Reset(m);
-        _lastMode = null;
+        Now = State.None;
         Plugin.Framework.Update -= OnUpdate;
     }
 
@@ -113,10 +129,6 @@ internal sealed unsafe class Mounted : IDisposable
 
     private void Frame()
     {
-        var now = Environment.TickCount64;
-        if (_p.Speeds.LearnHere && now >= _nextSample)
-            Sample(now);
-
         // Target changed? (raw pointer compare: nothing else happens until it does)
         var raw = (nint)TargetSystem.Instance()->Target;
         if (raw != _lastTarget)
@@ -124,18 +136,19 @@ internal sealed unsafe class Mounted : IDisposable
             _lastTarget = raw;
             OnTargetChanged((GameObject*)raw);
         }
-        if (_enemy == null || !Config.DismountOnEnemy)
+        if (_enemy == null)
             return;
         if (_enemy->IsDead())
         {
             _enemy = null;
-            Status = "";
+            Now = State.None;
             return;
         }
 
+        var now = Environment.TickCount64;
         if (Config.EnemyMode == EnemyDismount.WhenTargeted)
         {
-            DoDismount(now, "you targeted an enemy");
+            DoDismount(now, 0f, 0f);
             return;
         }
 
@@ -154,7 +167,7 @@ internal sealed unsafe class Mounted : IDisposable
             RefreshHeight(now);
             if (float.IsNaN(_height))
             {
-                Status = "enemy targeted, nowhere to land below you";
+                Now = State.NoLanding;
                 _lastGap = float.NaN;
                 return;
             }
@@ -168,33 +181,40 @@ internal sealed unsafe class Mounted : IDisposable
         _lastGap = gap;
         var lead = flying ? _p.Speeds.LandingSeconds(_height) * Math.Max(0f, _closing) : 0f;
         var range = _p.Range.Yalms;
-        Status = $"enemy at {gap:0} y, dismount at {range + lead:0} y";
+        Gap = gap;
+        DismountAt = range + lead;
+        Now = State.Approaching;
         if (gap - lead > range)
             return;
 
-        // In range: make sure you could actually hit it from here (line of sight), at most 4 times a second.
-        // (Not while flying: what you see from up there says nothing about the landing spot.)
-        if (!flying && _p.Range.ActionId != 0 && now - _losCheckedAt >= 250)
+        // In range: make sure you could actually hit it from here (line of sight). Checked 4 times a second; the
+        // answer holds in between. (Not while flying: what you see from up there says nothing about the landing spot.)
+        if (!flying && _p.Range.ActionId != 0)
         {
-            _losCheckedAt = now;
-            var los = ActionManager.GetActionInRangeOrLoS(_p.Range.ActionId, (GameObject*)player, _enemy);
-            if (los == 562) // no line of sight
+            if (now - _losCheckedAt >= 250)
             {
-                Status = "enemy in range, no line of sight yet";
+                _losCheckedAt = now;
+                _losBlocked = ActionManager.GetActionInRangeOrLoS(_p.Range.ActionId, (GameObject*)player, _enemy) == 562;
+            }
+            if (_losBlocked)
+            {
+                Now = State.NoSight;
                 return;
             }
         }
-        DoDismount(now, $"enemy within {range:0} y{(lead > 0.5f ? $" (+{lead:0} y to land)" : "")}");
+        DoDismount(now, range, lead);
     }
 
     private void OnTargetChanged(GameObject* target)
     {
         _enemy = null;
-        Status = "";
+        Now = State.None;
         _lastGap = float.NaN;
         _closing = 0;
+        _losCheckedAt = 0;
+        _losBlocked = false;
         _lastFrameAt = Environment.TickCount64;
-        if (target == null || !Config.DismountOnEnemy)
+        if (target == null)
             return;
         // An enemy = something you could auto-attack (action 7), as the game itself decides.
         if (target->ObjectKind != FFXIVClientStructs.FFXIV.Client.Game.Object.ObjectKind.BattleNpc
@@ -206,29 +226,25 @@ internal sealed unsafe class Mounted : IDisposable
         Plugin.Info($"Enemy targeted; attack range {_p.Range.Yalms:0} y ({_p.Range.ActionName})");
     }
 
-    private void DoDismount(long now, string why)
+    private void DoDismount(long now, float range, float lead)
     {
         if (_dismountAt != 0 && now - _dismountAt < 1500)
             return; // pressed already: landing/dismounting takes a moment
         if (_dismountTries >= 3 || Plugin.Condition[ConditionFlag.RidingPillion])
             return;
         _dismountTries++;
-        _dismountInFlight = Plugin.Condition[ConditionFlag.InFlight];
-        if (_dismountInFlight)
+        if (Plugin.Condition[ConditionFlag.InFlight])
             RefreshHeight(now, force: true);
-        _dismountHeight = _height;
-        _touchdownAt = 0;
-        if (Game.Use(ActionType.GeneralAction, Game.Dismount))
-        {
-            _dismountAt = now;
-            Plugin.Info($"Dismount: {why}");
-        }
+        if (!Game.Use(ActionType.GeneralAction, Game.Dismount))
+            return;
+        NoteDismount(now);
+        _dismountHeight = _height; // just measured
+        if (range <= 0) Plugin.Info("Dismount: you targeted an enemy");
+        else Plugin.Info($"Dismount: enemy within {range:0} y{(lead > 0.5f ? $" (+{lead:0} y to land)" : "")}");
+        _p.Link.DismountedForCombat();
     }
 
-    /// <summary>
-    /// Height above the spot the game would land you on (its own "can I dismount here" check). At most 4 times a
-    /// second, and only while flying toward an enemy or when dismounting.
-    /// </summary>
+    /// <summary>Height above the landing spot, at most 4 times a second (only flying toward an enemy).</summary>
     private void RefreshHeight(long now, bool force = false)
     {
         if (!force && now - _heightAt < 250)
@@ -237,6 +253,7 @@ internal sealed unsafe class Mounted : IDisposable
         _height = HeightAboveLanding();
     }
 
+    /// <summary>Height above the spot the game would land you on (its own "can I dismount here" check); NaN if none.</summary>
     internal static float HeightAboveLanding()
     {
         var player = Game.Player;
@@ -247,32 +264,5 @@ internal sealed unsafe class Mounted : IDisposable
         if (!ui->GetIsAirDismountable(&ground))
             return float.NaN;
         return Math.Max(0f, player->Position.Y - ground.Y);
-    }
-
-    private void Sample(long now)
-    {
-        _nextSample = now + 100;
-        var player = Game.Player;
-        if (player == null)
-        {
-            _hasSample = false;
-            return;
-        }
-        var pos = player->Position;
-        var dt = (now - _sampleAt) / 1000f;
-        var flying = Plugin.Condition[ConditionFlag.InFlight] || Plugin.Condition[ConditionFlag.Diving];
-        var moved = flying ? Vector3.Distance(pos, _samplePos)
-                           : Vector2.Distance(new Vector2(pos.X, pos.Z), new Vector2(_samplePos.X, _samplePos.Z));
-        var had = _hasSample;
-        _samplePos = pos;
-        _sampleAt = now;
-        _hasSample = true;
-        if (!had || _dismountAt != 0 || Game.MountComing || Plugin.Condition[ConditionFlag.RidingPillion])
-            return;
-        var mode = flying ? MoveMode.Fly : MoveMode.Ride;
-        if (_lastMode is { } last && last != mode)
-            _p.Speeds.Reset(last);
-        _lastMode = mode;
-        _p.Speeds.Slice(mode, moved, dt);
     }
 }

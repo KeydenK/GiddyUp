@@ -92,6 +92,12 @@ internal sealed unsafe class ConfigWindow : Window
                + "Peloton and dismounting. Beeline's learned speeds are used here too (Advanced tab), so they're not "
                + "measured twice.");
         }
+        else
+            Companion("Beeline", "https://raw.githubusercontent.com/KeydenK/Beeline/main/repo.json",
+                      "Point at anything on your map and press one button: Beeline takes you there the quickest way "
+                    + "(teleport, aethernet, mount, flying), right up to quest NPCs and objects. Together, Beeline "
+                    + "decides when to mount on its trips, Giddy Up handles Sprint, Peloton and getting you off for a "
+                    + "fight, and Giddy Up uses Beeline's learned speeds.");
         if (_plugin.Link.TripActive)
             StatusLine(ImGuiColors.DalamudYellow, FontAwesomeIcon.Route, "Beeline trip: Beeline decides mounting, Giddy Up the rest");
         if (!_plugin.ActionDismount.HookWorks)
@@ -326,6 +332,28 @@ internal sealed unsafe class ConfigWindow : Window
     private static readonly string[] EnemyItems = ["once it's within your attack range", "as soon as you target it"];
 
     private static readonly string[] TimingItems = ["right away", "when you move"];
+
+    /// <summary>
+    /// The companion plugin isn't installed: say what it adds, and how to get it (its repository link, with a Copy
+    /// button, in Dalamud's custom repositories, then install it).
+    /// </summary>
+    private static void Companion(string name, string repoUrl, string whatItAdds)
+    {
+        StatusLine(ImGuiColors.DalamudViolet, FontAwesomeIcon.PuzzlePiece, $"Works great with {name} (not installed)");
+        Help(whatItAdds);
+        using var node = ImRaii.TreeNode($"How to get {name}##get{name}");
+        if (!node)
+            return;
+        ImGui.TextUnformatted("1. Type /xlsettings and open the Experimental tab.");
+        ImGui.TextUnformatted("2. Under Custom Plugin Repositories, paste this link, click +, then Save and Close:");
+        var url = repoUrl;
+        ImGui.SetNextItemWidth(330 * ImGuiHelpers.GlobalScale);
+        ImGui.InputText($"##url{name}", ref url, 256, ImGuiInputTextFlags.ReadOnly);
+        ImGui.SameLine();
+        if (ImGui.SmallButton($"Copy##copy{name}"))
+            ImGui.SetClipboardText(repoUrl);
+        ImGui.TextUnformatted($"3. Type /xlplugins, search for {name} and install it.");
+    }
 
     /// <summary>One auto-mount trigger: its checkbox, then (when on) right away / when you move, on the same line.</summary>
     private void Trigger(string id, string label, Func<bool> get, Action<bool> set, Func<MountTiming> getTiming,

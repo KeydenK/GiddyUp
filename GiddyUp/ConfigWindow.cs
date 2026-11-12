@@ -124,7 +124,8 @@ internal sealed unsafe class ConfigWindow : Window
         Check("Combat", () => Config.MountAfterCombat, v => Config.MountAfterCombat = v);
         Check("Gathering or fishing", () => Config.MountAfterGathering, v => Config.MountAfterGathering = v);
         Check("Crafting", () => Config.MountAfterCrafting, v => Config.MountAfterCrafting = v);
-        Check("Talking to someone", () => Config.MountAfterTalking, v => Config.MountAfterTalking = v);
+        Check("Talking to someone or using something", () => Config.MountAfterTalking, v => Config.MountAfterTalking = v,
+              "After a conversation, or after interacting with an object (quest objects, switches, chests...).");
 
         Check("Mount as soon as you're done", () => Config.MountSmart, v => Config.MountSmart = v,
               "Giddy Up waits until you're idle: not casting, and no action used (by you or a rotation plugin) for one "

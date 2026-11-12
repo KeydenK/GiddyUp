@@ -120,8 +120,12 @@ internal sealed unsafe class OnFoot : IDisposable
             case ConditionFlag.Crafting:
                 Trigger(value, Config.MountAfterCrafting, "after crafting");
                 break;
-            case ConditionFlag.OccupiedInEvent or ConditionFlag.OccupiedInQuestEvent:
-                Trigger(value, Config.MountAfterTalking, "after talking");
+            // Talking to someone, or using something (quest objects, switches, chests...): the game marks these as
+            // "occupied" in one of several ways. Logged, so an interaction that doesn't trigger can be identified.
+            case ConditionFlag.OccupiedInEvent or ConditionFlag.OccupiedInQuestEvent or ConditionFlag.Occupied
+                 or ConditionFlag.Occupied30 or ConditionFlag.Occupied33 or ConditionFlag.Occupied38 or ConditionFlag.Occupied39:
+                Plugin.Info($"{flag} {(value ? "started" : "ended")}");
+                Trigger(value, Config.MountAfterTalking, "after talking or interacting");
                 break;
         }
     }

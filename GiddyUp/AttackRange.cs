@@ -56,8 +56,9 @@ internal sealed unsafe class AttackRange
     private static readonly HashSet<byte> NeedsSomethingFirst = [11, 32, 46, 48, 49, 58, 75, 127];
     private const byte GlobalCooldownGroup = 58;
     private const uint BlueMage = 36;
-    /// <summary>Only tells melee weapons (3 y reach) from ranged ones (25 y); not a distance used for decisions.</summary>
-    private const float MeleeReachMax = 5f;
+    /// <summary>ClassJob.Role in the game data: 1 tank, 2 melee DPS, 3 ranged DPS (physical and magical), 4 healer.</summary>
+    private const byte TankRole = 1, MeleeRole = 2;
+    private const uint AutoAttack = 7;
 
     /// <summary>Start the background scan for this job now (login, job change), so it's ready before you need it.</summary>
     internal void Prefetch()
@@ -140,7 +141,7 @@ internal sealed unsafe class AttackRange
     /// <summary>Game thread: unlocked at your level (and, for Blue Mage, in your active set); the game's own range.</summary>
     private void Pick(List<Candidate> candidates, uint job, uint level)
     {
-        float best = 3f;
+        float best = ActionManager.GetActionRange(AutoAttack); // the game's own reach for you, if nothing else qualifies
         uint bestId = 0;
         var bestName = "auto-attack";
         var ui = UIState.Instance();
@@ -152,21 +153,14 @@ internal sealed unsafe class AttackRange
             for (var i = 0; i < 24; i++)
                 blueSet.Add(blue->GetActiveBlueMageActionInSlot(i));
         }
-        // Option "melee jobs at melee range": if your weapon's reach is melee (the game says so for the "-1 = weapon
-        // reach" attacks: 3 y for melee weapons vs 25 y for bows, guns, chakrams), the single-target ranged openers
-        // (Shield Lob, Piercing Talon...) don't count; your close-range attacks do (weapon reach, and lines/cones aimed
-        // at the target like Doom Spike or Fuga, which reach a few yalms further).
+        // Option "melee jobs at melee range": on a tank or melee DPS (the job's role in the game data, so no distance
+        // is assumed anywhere), the single-target ranged openers (Shield Lob, Piercing Talon...) don't count; your
+        // close-range attacks do (weapon reach, and lines/cones aimed at the target like Doom Spike or Fuga, which
+        // reach a few yalms further). The ranges themselves are always the game's own, range changes included.
         var am = ActionManager.Instance();
-        var closeOnly = false;
-        if (_meleeAtMelee)
-        {
-            foreach (var c in candidates)
-                if (c.SheetRange == -1 && c.Level <= level)
-                {
-                    closeOnly = ActionManager.GetActionRange(c.Id) <= MeleeReachMax;
-                    break;
-                }
-        }
+        var closeOnly = _meleeAtMelee
+                        && Plugin.Data.GetExcelSheet<Lumina.Excel.Sheets.ClassJob>().TryGetRow(job, out var cj)
+                        && cj.Role is TankRole or MeleeRole;
         foreach (var c in candidates)
         {
             if (c.Level > level || (blueSet != null && !blueSet.Contains(c.Id))

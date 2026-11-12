@@ -252,7 +252,7 @@ internal sealed unsafe class Mounted : IDisposable
                 Plugin.Info("Enemy in range: stopping the Beeline trip so you can land");
                 _p.Link.DismountedForCombat(); // the trip stops, and with it the movement
             }
-            else
+            else if (Config.HoldStillNotice)
                 Plugin.Toast.ShowNormal("Giddy Up: hold still to land");
         }
         return true;

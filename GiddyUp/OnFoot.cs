@@ -22,9 +22,12 @@ internal sealed unsafe class OnFoot : IDisposable
     private float _movingFor;
     private MoveMode? _lastMode;
 
-    // Auto-mount: why we want to mount (null = we don't), when that started, and the attempts so far.
+    // Auto-mount: why we want to mount (null = we don't), right away or once you move, when that started, and the
+    // attempts so far (summons the game accepted, and refusals, which are retried sooner).
     private string? _mountReason;
-    private int _mountAttempts;
+    private MountTiming _mountTiming;
+    private int _mountCasts, _mountRefusals;
+    private bool _lastTryAccepted;
     private long _mountTriedAt;
     private long _mountWantedAt;
 
@@ -39,6 +42,14 @@ internal sealed unsafe class OnFoot : IDisposable
     private Configuration Config => _p.Config;
 
     internal string? MountReason => _mountReason;
+    internal bool MountWhenMoving => _mountTiming == MountTiming.WhenMoving;
+
+    /// <summary>
+    /// Your target when Giddy Up last summoned a mount, and when: an enemy you target while the mount is being
+    /// summoned (a summon can't be cancelled) then counts as a new target, so you get off as soon as it's there.
+    /// </summary>
+    internal nint TargetAtSummon { get; private set; }
+    internal long SummonedAt { get; private set; }
     internal bool Watching => _watching;
 
     public void Dispose() => Stop();
@@ -109,52 +120,56 @@ internal sealed unsafe class OnFoot : IDisposable
                 _mountReason = null;
                 break;
             case ConditionFlag.BetweenAreas:
-                Trigger(value, Config.MountAfterZoneChange, "zone change");
+                Trigger(value, Config.MountAfterZoneChange, Config.ZoneChangeTiming, "zone change");
                 break;
             case ConditionFlag.InCombat:
-                Trigger(value, Config.MountAfterCombat, "after combat");
+                Trigger(value, Config.MountAfterCombat, Config.CombatTiming, "after combat");
                 break;
             case ConditionFlag.Gathering or ConditionFlag.Fishing:
-                Trigger(value, Config.MountAfterGathering, "after gathering");
+                Trigger(value, Config.MountAfterGathering, Config.GatheringTiming, "after gathering");
                 break;
             case ConditionFlag.Crafting:
-                Trigger(value, Config.MountAfterCrafting, "after crafting");
+                Trigger(value, Config.MountAfterCrafting, Config.CraftingTiming, "after crafting");
                 break;
             // Talking to someone or using something (quest objects, switches, chests...): both are game "events"
             // (verified in game with Hats Off: NPC talks and object interactions set these same two states).
             case ConditionFlag.OccupiedInEvent or ConditionFlag.OccupiedInQuestEvent:
-                Trigger(value, Config.MountAfterTalking, "after talking or interacting");
+                Trigger(value, Config.MountAfterTalking, Config.TalkingTiming, "after talking or interacting");
                 break;
         }
     }
 
-    private void Trigger(bool started, bool enabled, string reason)
+    private void Trigger(bool started, bool enabled, MountTiming timing, string reason)
     {
         if (started)
             _mountReason = null; // doing something here: no mount until it ends
         else if (enabled)
-            WantMount(reason);
+            WantMount(reason, timing);
     }
 
     /// <summary>A Beeline trip started: Beeline decides mounting for the trip.</summary>
     internal void OnTripStarted() => _mountReason = null;
 
-    private void WantMount(string reason)
+    private void WantMount(string reason, MountTiming timing)
     {
         if (_p.Link.TripActive)
             return; // Beeline decides mounting during its trips
         if (Game.IsMounted || !MountAllowedHere())
             return;
         _mountReason = reason;
-        _mountAttempts = 0;
+        _mountTiming = timing;
+        _mountCasts = _mountRefusals = 0;
+        _mountTriedAt = 0;
         _mountWantedAt = Environment.TickCount64;
-        Plugin.Info($"Will mount ({reason})" + (Config.MountSmart ? " once you're done" : $" in {Config.MountDelaySeconds:0.0} s"));
+        Plugin.Info($"Will mount ({reason})" + (timing == MountTiming.WhenMoving ? " when you start moving," : "")
+                    + (Config.MountSmart ? " once you're done" : $" {Config.MountDelaySeconds:0.0} s after"));
     }
 
     /// <summary>
     /// Is it time to summon the mount? Smart (default): as soon as you're done, meaning no cast, no animation lock,
-    /// and no action used (by you or a rotation plugin: a Pictomancer painting motifs, buffs, heals...) for one of
-    /// your global cooldowns plus your measured action delay. A summon is a cast that would block those actions, so it
+    /// and no action used (a Pictomancer painting motifs, buffs, heals...) for one of your global cooldowns plus
+    /// your measured action delay, counted from the end of your last cast. A summon is a cast that would block those
+    /// actions, so it
     /// waits for them. Otherwise: your fixed delay.
     /// </summary>
     private bool TimeToMount(long now)
@@ -181,7 +196,7 @@ internal sealed unsafe class OnFoot : IDisposable
         }
         catch (Exception e)
         {
-            Plugin.Log.Error(e, $"{Plugin.Tag} On-foot update failed");
+            Plugin.Log.Error(e, $"On-foot update failed");
             _nextTick = now + 5000;
         }
     }
@@ -252,18 +267,32 @@ internal sealed unsafe class OnFoot : IDisposable
         if (Game.IsMounted || c[ConditionFlag.InCombat] || Game.Busy() || _p.ActionDismount.ReplayPending)
             return;
 
-        // 1. Mount, moving or not, once it's time (see TimeToMount) and the game allows it right here, right now.
-        //    While a mount is on its way, no Sprint/Peloton (mounting ends them anyway).
-        if (_mountReason != null && Game.Ready(ActionType.GeneralAction, Game.MountRoulette))
+        var enemyTargeted = EnemyTargeted();
+
+        // 1. Mount, once it's time (see TimeToMount; right away or once you move, per trigger) and the game allows it
+        //    here and now. While a mount is pending, no Sprint/Peloton: mounting ends them, they'd only cost time.
+        //    Targeting an enemy cancels it: you're about to fight.
+        if (_mountReason != null)
         {
-            if (!MountAllowedHere()) // checked again: a duty may have started since
+            if (enemyTargeted)
+            {
+                Plugin.Info($"Not mounting ({_mountReason}): you targeted an enemy");
                 _mountReason = null;
-            else if (TimeToMount(now))
-                TryMount(now);
-            return;
+            }
+            else
+            {
+                if (!MountAllowedHere()) // checked again: a duty may have started since
+                    _mountReason = null;
+                else if ((_mountTiming == MountTiming.RightAway || _movingFor >= Config.MoveSeconds)
+                         && Game.Ready(ActionType.GeneralAction, Game.MountRoulette) && TimeToMount(now))
+                    TryMount(now);
+                return;
+            }
         }
 
-        if (walking || _movingFor < Config.MoveSeconds)
+        // No Sprint/Peloton with an enemy targeted either: you're about to fight (their animation lock would only
+        // delay your first attack).
+        if (walking || _movingFor < Config.MoveSeconds || enemyTargeted)
             return;
 
         // 2. Sprint: when it's ready and faster than how you move right now.
@@ -296,6 +325,14 @@ internal sealed unsafe class OnFoot : IDisposable
         }
     }
 
+    /// <summary>Your target is something you could attack (as the game decides: auto-attack would work on it).</summary>
+    private static bool EnemyTargeted()
+    {
+        var t = TargetSystem.Instance()->Target;
+        return t != null && t->ObjectKind == FFXIVClientStructs.FFXIV.Client.Game.Object.ObjectKind.BattleNpc
+               && !t->IsDead() && ActionManager.CanUseActionOnTarget(7, t);
+    }
+
     private void Wait(uint status, long now)
     {
         _waiting = true;
@@ -305,27 +342,35 @@ internal sealed unsafe class OnFoot : IDisposable
 
     private void TryMount(long now)
     {
-        // A summon in progress shows as "mounting" (Busy); if nothing happened for a while, try again (3 tries).
-        if (_mountAttempts > 0 && now - _mountTriedAt < 3000)
+        // A summon the game accepted shows as "mounting" (Busy) and takes a moment: try again only if nothing happened
+        // for a few seconds (3 summons). A refusal (the game not ready yet, e.g. right after loading in) is retried
+        // half a second later, up to 10 times.
+        if (_mountTriedAt != 0 && now - _mountTriedAt < (_lastTryAccepted ? 3000 : 500))
             return;
-        if (_mountAttempts >= 3)
+        if (_mountCasts >= 3 || _mountRefusals >= 10)
         {
-            Plugin.Info($"Gave up mounting ({_mountReason}): the game refused 3 times");
+            Plugin.Info($"Gave up mounting ({_mountReason}): {_mountCasts} summons, {_mountRefusals} refusals");
             _mountReason = null;
             _p.Refresh();
             return;
         }
-        _mountAttempts++;
         _mountTriedAt = now;
+        TargetAtSummon = (nint)TargetSystem.Instance()->Target;
+        SummonedAt = now;
         bool ok;
         if (Config.MountKind == MountChoice.Specific && Config.MountId != 0 && PlayerState.Instance()->IsMountUnlocked(Config.MountId)
             && Game.Ready(ActionType.Mount, Config.MountId))
             ok = Game.Use(ActionType.Mount, Config.MountId);
         else
             ok = Game.Use(ActionType.GeneralAction, Game.MountRoulette);
-        Plugin.Info(ok ? $"Mounting ({_mountReason}, {(now - _mountWantedAt) / 1000f:0.0} s after)"
-                       : $"Mount refused ({_mountReason}), try {_mountAttempts}");
+        _lastTryAccepted = ok;
         if (ok)
+        {
+            _mountCasts++;
+            Plugin.Info($"Mounting ({_mountReason}, {(now - _mountWantedAt) / 1000f:0.0} s after)");
             Wait(0, now);
+        }
+        else if (_mountRefusals++ == 0)
+            Plugin.Info($"Mount not possible yet ({_mountReason}): retrying");
     }
 }

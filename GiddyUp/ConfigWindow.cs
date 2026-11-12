@@ -63,7 +63,6 @@ internal sealed unsafe class ConfigWindow : Window
             StatusLine(ImGuiColors.HealerGreen, FontAwesomeIcon.Horse, m.Now switch
             {
                 Mounted.State.Approaching => $"Mounted: enemy at {m.Gap:0} y, dismounting at {m.DismountAt:0} y",
-                Mounted.State.NoLanding   => "Mounted: enemy targeted, nowhere to land below you",
                 Mounted.State.NoSight     => "Mounted: enemy in range, waiting for line of sight",
                 _                         => "Mounted",
             });
@@ -119,17 +118,26 @@ internal sealed unsafe class ConfigWindow : Window
 
     private void DrawMounting()
     {
-        Hint("Mount up automatically where mounts are allowed (never in duties), right after:");
-        Check("A zone change or teleport", () => Config.MountAfterZoneChange, v => Config.MountAfterZoneChange = v);
-        Check("Combat", () => Config.MountAfterCombat, v => Config.MountAfterCombat = v);
-        Check("Gathering or fishing", () => Config.MountAfterGathering, v => Config.MountAfterGathering = v);
-        Check("Crafting", () => Config.MountAfterCrafting, v => Config.MountAfterCrafting = v);
-        Check("Talking to someone or using something", () => Config.MountAfterTalking, v => Config.MountAfterTalking = v,
-              "After a conversation, or after interacting with an object (quest objects, switches, chests...).");
+        Hint("Mount up automatically where mounts are allowed (never in duties), after:");
+        Trigger("tzone", "A zone change or teleport", () => Config.MountAfterZoneChange, v => Config.MountAfterZoneChange = v,
+                () => Config.ZoneChangeTiming, v => Config.ZoneChangeTiming = v);
+        Trigger("tcombat", "Combat", () => Config.MountAfterCombat, v => Config.MountAfterCombat = v,
+                () => Config.CombatTiming, v => Config.CombatTiming = v);
+        Trigger("tgather", "Gathering or fishing", () => Config.MountAfterGathering, v => Config.MountAfterGathering = v,
+                () => Config.GatheringTiming, v => Config.GatheringTiming = v,
+                "'When you move' by default: after gathering many people teleport away, and the mount would be in the way.");
+        Trigger("tcraft", "Crafting", () => Config.MountAfterCrafting, v => Config.MountAfterCrafting = v,
+                () => Config.CraftingTiming, v => Config.CraftingTiming = v,
+                "'When you move' by default: the crafting log reopens after each craft while you stand still.");
+        Trigger("ttalk", "Talking to someone or using something", () => Config.MountAfterTalking, v => Config.MountAfterTalking = v,
+                () => Config.TalkingTiming, v => Config.TalkingTiming = v,
+                "After a conversation, or after interacting with an object (quest objects, switches, chests...). 'When you "
+              + "move' by default: someone with several quests reopens a conversation right after the last one.");
+        ImGuiHelpers.ScaledDummy(2);
 
         Check("Mount as soon as you're done", () => Config.MountSmart, v => Config.MountSmart = v,
-              "Giddy Up waits until you're idle: not casting, and no action used (by you or a rotation plugin) for one "
-            + "of your global cooldowns. So after a fight, a Pictomancer's ACR can paint its motifs, a healer can top "
+              "Giddy Up waits until you're idle: not casting, and no action used for one of your global cooldowns "
+            + "since your last cast ended. So after a fight, a Pictomancer can paint motifs, a healer can top "
             + "people up, and you can press your buffs: summoning a mount is a cast that would block all that. Turn "
             + "this off to pick a fixed delay instead.");
         if (!Config.MountSmart)
@@ -157,10 +165,9 @@ internal sealed unsafe class ConfigWindow : Window
         {
             ImGui.Indent();
             Check("Then use the action", () => Config.ReplayAction, v => Config.ReplayAction = v,
-                  "Once you're off, Giddy Up uses the action you pressed. Turn this off if a rotation plugin plays your "
-                + "actions for you: you'll just be dismounted and it takes over. Either way, if any other action is used "
-                + "first after you land, Giddy Up doesn't use yours on top of it.\n\nNote: Giddy Up can't tell your key "
-                + "presses from a rotation plugin's, so a rotation plugin that acts while you're mounted would dismount you.");
+                  "Once you're off, Giddy Up uses the action you pressed. Turn this off to only get off the mount and "
+                + "press it again yourself. Either way, if any other action is used first after you land, Giddy Up "
+                + "doesn't use yours on top of it.");
             ImGui.Unindent();
         }
         Check("Dismount for an enemy you target", () => Config.DismountOnEnemy, v => Config.DismountOnEnemy = v);
@@ -309,6 +316,33 @@ internal sealed unsafe class ConfigWindow : Window
     }
 
     private static readonly string[] EnemyItems = ["once it's within your attack range", "as soon as you target it"];
+
+    private static readonly string[] TimingItems = ["right away", "when you move"];
+
+    /// <summary>One auto-mount trigger: its checkbox, then (when on) right away / when you move, on the same line.</summary>
+    private void Trigger(string id, string label, Func<bool> get, Action<bool> set, Func<MountTiming> getTiming,
+                         Action<MountTiming> setTiming, string? help = null)
+    {
+        var on = get();
+        if (ImGui.Checkbox(label, ref on))
+        {
+            set(on);
+            _plugin.SaveConfig();
+        }
+        if (on)
+        {
+            ImGui.SameLine();
+            ImGui.SetNextItemWidth(130 * ImGuiHelpers.GlobalScale);
+            var t = (int)getTiming();
+            if (ImGui.Combo($"##{id}", ref t, TimingItems))
+            {
+                setTiming((MountTiming)t);
+                _plugin.SaveConfig();
+            }
+        }
+        if (help != null)
+            Help(help);
+    }
 
     /// <summary>Sliders: save once you let go, not on every frame while dragging.</summary>
     private void SaveWhenReleased()

@@ -34,7 +34,8 @@ internal sealed unsafe class ActionDismount : IDisposable
     internal bool ReplayPending => _queued;
 
     /// <summary>
-    /// When you (or a rotation plugin) last used an action or item; Giddy Up's own Sprint/Peloton/mount don't count.
+    /// When you last used an action or item, or a cast of yours ended (so a long cast counts from its end); Giddy
+    /// Up's own Sprint/Peloton/mount don't count.
     /// Auto-mount waits until you've been idle for a GCD, so it doesn't cut into after-fight actions (one write per
     /// action, nothing else).
     /// </summary>
@@ -51,7 +52,7 @@ internal sealed unsafe class ActionDismount : IDisposable
         }
         catch (Exception e)
         {
-            Plugin.Log.Error(e, $"{Plugin.Tag} Couldn't hook action use: \"dismount when using an action\" is unavailable");
+            Plugin.Log.Error(e, $"Couldn't hook action use: \"dismount when using an action\" is unavailable");
         }
     }
 
@@ -67,7 +68,7 @@ internal sealed unsafe class ActionDismount : IDisposable
             LastActionAt = Environment.TickCount64;
         try
         {
-            // Off the mount and another action came first (a rotation plugin, or you): it wins, no replay on top of it.
+            // Off the mount and another action came first: it wins, no replay on top of it.
             if (_queued && !_replaying && type == ActionType.Action && !Plugin.Condition[ConditionFlag.Mounted])
             {
                 Plugin.Info($"{Game.ActionName(id)} came first after dismounting: not using {Game.ActionName(_id)} too");
@@ -107,7 +108,7 @@ internal sealed unsafe class ActionDismount : IDisposable
         }
         catch (Exception e)
         {
-            Plugin.Log.Error(e, $"{Plugin.Tag} Action check failed");
+            Plugin.Log.Error(e, $"Action check failed");
         }
         return _hook!.Original(am, type, id, target, extra, mode, combo, outAreaTargeted);
     }
@@ -177,6 +178,13 @@ internal sealed unsafe class ActionDismount : IDisposable
     }
 
     internal void Reset() => StopReplay();
+
+    /// <summary>A cast just ended: "idle" counts from here, not from when it started.</summary>
+    internal void OnCondition(Dalamud.Game.ClientState.Conditions.ConditionFlag flag, bool value)
+    {
+        if (!value && flag is ConditionFlag.Casting or ConditionFlag.Casting87)
+            LastActionAt = Environment.TickCount64;
+    }
 
     private long _offAt, _triedAt; // when you were first seen off the mount; last replay attempt
 

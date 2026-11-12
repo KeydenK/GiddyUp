@@ -30,8 +30,8 @@ public sealed class Plugin : IDalamudPlugin
     /// <summary>What Giddy Up does and why: Information when the detailed log is on (always in dev builds), else Debug.</summary>
     internal static void Info(string message)
     {
-        if (DetailedLog) Log.Information($"{Tag} {message}");
-        else Log.Debug($"{Tag} {message}");
+        if (DetailedLog) Log.Information(message);
+        else Log.Debug(message);
     }
 
     internal readonly Speeds Speeds;
@@ -82,7 +82,7 @@ public sealed class Plugin : IDalamudPlugin
             }
             catch (Exception e)
             {
-                Log.Error(e, $"{Tag} Start-up failed");
+                Log.Error(e, $"Start-up failed");
             }
         });
     }
@@ -143,6 +143,7 @@ public sealed class Plugin : IDalamudPlugin
     {
         OnFoot.OnCondition(flag, value);
         Mounted.OnCondition(flag, value);
+        ActionDismount.OnCondition(flag, value);
         Refresh();
         SaveIfDirty();
     }

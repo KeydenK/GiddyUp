@@ -20,7 +20,16 @@ public sealed class Configuration : Dalamud.Configuration.IPluginConfiguration
     public bool MountAfterCrafting { get; set; } = true;
     public bool MountAfterTalking { get; set; } = true;
     /// <summary>
-    /// Smart (default): mount as soon as you're done (no cast, no action from you or a rotation plugin for a GCD).
+    /// Per trigger: mount right away, or once you start moving. Moving suits the ones often followed by a teleport
+    /// (gathering), a window that reopens (crafting) or another conversation (quest givers with several quests).
+    /// </summary>
+    public MountTiming ZoneChangeTiming { get; set; } = MountTiming.RightAway;
+    public MountTiming CombatTiming { get; set; } = MountTiming.RightAway;
+    public MountTiming GatheringTiming { get; set; } = MountTiming.WhenMoving;
+    public MountTiming CraftingTiming { get; set; } = MountTiming.WhenMoving;
+    public MountTiming TalkingTiming { get; set; } = MountTiming.WhenMoving;
+    /// <summary>
+    /// Smart (default): mount as soon as you're done (no cast, no action used for a GCD).
     /// Off: wait <see cref="MountDelaySeconds"/> instead.
     /// </summary>
     public bool MountSmart { get; set; } = true;
@@ -31,7 +40,7 @@ public sealed class Configuration : Dalamud.Configuration.IPluginConfiguration
     // ---------------- Dismounting ----------------
     /// <summary>Using an action that can't be used on a mount gets you off it, then the action goes off.</summary>
     public bool DismountOnAction { get; set; } = true;
-    /// <summary>...then use that action once you're on your feet. Off: only dismount (e.g. a rotation plugin takes over).</summary>
+    /// <summary>...then use that action once you're on your feet. Off: only dismount.</summary>
     public bool ReplayAction { get; set; } = true;
     public bool DismountOnEnemy { get; set; } = true;
     public EnemyDismount EnemyMode { get; set; } = EnemyDismount.InRange;
@@ -70,4 +79,5 @@ public sealed class Configuration : Dalamud.Configuration.IPluginConfiguration
 }
 
 public enum MountChoice { Roulette = 0, Specific = 2 }
+public enum MountTiming { RightAway = 0, WhenMoving = 1 }
 public enum EnemyDismount { InRange = 0, WhenTargeted = 1 }

@@ -3,7 +3,7 @@ using Dalamud.Game.ClientState.Conditions;
 using Dalamud.Plugin.Services;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.Game.Control;
-using FFXIVClientStructs.FFXIV.Client.Game.UI;
+using FFXIVClientStructs.FFXIV.Common.Component.BGCollision;
 using GameObject = FFXIVClientStructs.FFXIV.Client.Game.Object.GameObject;
 
 namespace GiddyUp;
@@ -41,7 +41,7 @@ internal sealed unsafe class Mounted : IDisposable
     private Configuration Config => _p.Config;
 
     // For the settings header (formatted there, only while the window is open).
-    internal enum State { None, Approaching, NoLanding, NoSight }
+    internal enum State { None, Approaching, NoSight }
     internal State Now { get; private set; }
     internal float Gap { get; private set; }
     internal float DismountAt { get; private set; }
@@ -97,8 +97,11 @@ internal sealed unsafe class Mounted : IDisposable
     {
         if (_watching) return;
         _watching = true;
-        // An enemy already targeted when you mounted doesn't count (you chose to mount anyway).
-        _lastTarget = (nint)TargetSystem.Instance()->Target;
+        // An enemy already targeted when you mounted doesn't count (you chose to mount anyway)... unless Giddy Up summoned
+        // this mount and you targeted the enemy while it was coming (a summon can't be cancelled): then it's a new
+        // target, handled on the first frame.
+        var summonedRecently = Environment.TickCount64 - _p.OnFoot.SummonedAt < 10_000;
+        _lastTarget = summonedRecently ? _p.OnFoot.TargetAtSummon : (nint)TargetSystem.Instance()->Target;
         _enemy = null;
         _dismountTries = 0;
         Now = State.None;
@@ -122,7 +125,7 @@ internal sealed unsafe class Mounted : IDisposable
         }
         catch (Exception e)
         {
-            Plugin.Log.Error(e, $"{Plugin.Tag} Mounted update failed");
+            Plugin.Log.Error(e, $"Mounted update failed");
             Stop();
         }
     }
@@ -165,13 +168,9 @@ internal sealed unsafe class Mounted : IDisposable
         if (flying)
         {
             RefreshHeight(now);
-            if (float.IsNaN(_height))
-            {
-                Now = State.NoLanding;
-                _lastGap = float.NaN;
-                return;
-            }
-            from.Y -= _height;
+            // No ground found below (rare: over the edge of the map): measure from where you are, never stay stuck.
+            if (!float.IsNaN(_height))
+                from.Y -= _height;
         }
         var gap = Vector3.Distance(from, _enemy->Position) - player->HitboxRadius - _enemy->HitboxRadius;
         var dt = (now - _lastFrameAt) / 1000f;
@@ -179,7 +178,7 @@ internal sealed unsafe class Mounted : IDisposable
         if (!float.IsNaN(_lastGap) && dt is > 0 and < 0.5f)
             _closing += ((_lastGap - gap) / dt - _closing) * Math.Min(1f, dt * 4f); // ~0.25 s smoothing
         _lastGap = gap;
-        var lead = flying ? _p.Speeds.LandingSeconds(_height) * Math.Max(0f, _closing) : 0f;
+        var lead = flying ? _p.Speeds.LandingSeconds(float.IsNaN(_height) ? 0f : _height) * Math.Max(0f, _closing) : 0f;
         var range = _p.Range.Yalms;
         Gap = gap;
         DismountAt = range + lead;
@@ -254,15 +253,18 @@ internal sealed unsafe class Mounted : IDisposable
     }
 
     /// <summary>Height above the spot the game would land you on (its own "can I dismount here" check); NaN if none.</summary>
+    /// <summary>
+    /// How high you are above the ground right below you: a collision ray cast straight down from your position (the
+    /// game's own terrain and buildings). NaN if it hits nothing.
+    /// </summary>
     internal static float HeightAboveLanding()
     {
         var player = Game.Player;
-        var ui = UIState.Instance();
-        if (player == null || ui == null)
+        if (player == null)
             return float.NaN;
-        FFXIVClientStructs.FFXIV.Common.Math.Vector3 ground;
-        if (!ui->GetIsAirDismountable(&ground))
+        var pos = player->Position;
+        if (!BGCollisionModule.RaycastMaterialFilter(pos, new Vector3(0, -1, 0), out var hit, 1000f))
             return float.NaN;
-        return Math.Max(0f, player->Position.Y - ground.Y);
+        return Math.Max(0f, pos.Y - hit.Point.Y);
     }
 }

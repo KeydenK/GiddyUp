@@ -77,7 +77,7 @@ internal sealed class Link : IDisposable
     internal void DismountedForCombat()
     {
         try { _dismountedForCombat.SendMessage(); }
-        catch (Exception e) { Plugin.Log.Debug(e, $"{Plugin.Tag} Couldn't notify Beeline"); }
+        catch (Exception e) { Plugin.Log.Debug(e, $"Couldn't notify Beeline"); }
     }
 
     private void OnTripStarted()

@@ -114,33 +114,35 @@ internal sealed unsafe class ConfigWindow : Window
         if (ImGui.SliderFloat("Moving for at least", ref move, 0f, 2f, "%.1f s"))
             Config.MoveSeconds = move;
         SaveWhenReleased();
-        Help("How long you must have been moving before Giddy Up reacts (Sprint, Peloton, or a mount 'when you start "
-           + "moving'), so a small step doesn't spend them.");
+        Help("How long you must have been moving before Sprint or Peloton is used, so a small step doesn't spend them.");
     }
 
     private void DrawMounting()
     {
-        Hint("Mount up automatically, where mounts are allowed (never in duties):");
-        Check("After a zone change or teleport", () => Config.MountAfterZoneChange, v => Config.MountAfterZoneChange = v);
-        Check("After combat", () => Config.MountAfterCombat, v => Config.MountAfterCombat = v);
-        Check("After gathering", () => Config.MountAfterGathering, v => Config.MountAfterGathering = v);
+        Hint("Mount up automatically where mounts are allowed (never in duties), right after:");
+        Check("A zone change or teleport", () => Config.MountAfterZoneChange, v => Config.MountAfterZoneChange = v);
+        Check("Combat", () => Config.MountAfterCombat, v => Config.MountAfterCombat = v);
+        Check("Gathering or fishing", () => Config.MountAfterGathering, v => Config.MountAfterGathering = v);
+        Check("Crafting", () => Config.MountAfterCrafting, v => Config.MountAfterCrafting = v);
+        Check("Talking to someone", () => Config.MountAfterTalking, v => Config.MountAfterTalking = v);
 
-        ImGui.SetNextItemWidth(200 * ImGuiHelpers.GlobalScale);
-        var when = (int)Config.MountWhen;
-        if (ImGui.Combo("When", ref when, WhenItems))
+        Check("Mount as soon as you're done", () => Config.MountSmart, v => Config.MountSmart = v,
+              "Giddy Up waits until you're idle: not casting, and no action used (by you or a rotation plugin) for one "
+            + "of your global cooldowns. So after a fight, a Pictomancer's ACR can paint its motifs, a healer can top "
+            + "people up, and you can press your buffs: summoning a mount is a cast that would block all that. Turn "
+            + "this off to pick a fixed delay instead.");
+        if (!Config.MountSmart)
         {
-            Config.MountWhen = (MountTiming)when;
-            _plugin.SaveConfig();
+            ImGui.Indent();
+            ImGui.SetNextItemWidth(160 * ImGuiHelpers.GlobalScale);
+            var delay = Config.MountDelaySeconds;
+            if (ImGui.SliderFloat("Delay", ref delay, 0f, 10f, "%.1f s"))
+                Config.MountDelaySeconds = delay;
+            SaveWhenReleased();
+            Help("Wait this long after the fight, zone change, gathering... before summoning (still never while you're "
+               + "casting or busy).");
+            ImGui.Unindent();
         }
-        Help("'When you start moving': you keep moving while the mount is summoned, and standing around (at a vendor, "
-           + "waiting for a friend) doesn't put you on a mount for nothing.");
-        ImGui.SetNextItemWidth(160 * ImGuiHelpers.GlobalScale);
-        var forget = Config.MountForgetSeconds;
-        if (ImGui.SliderFloat("Forget it after", ref forget, 10f, 300f, "%.0f s"))
-            Config.MountForgetSeconds = forget;
-        SaveWhenReleased();
-        Help("If you don't move off within this time (you stayed to sell, craft, chat...), Giddy Up doesn't mount you "
-           + "later. Talking to someone also cancels it.");
         DrawMountPicker();
     }
 
@@ -305,7 +307,6 @@ internal sealed unsafe class ConfigWindow : Window
         ImGuiComponents.HelpMarker(text);
     }
 
-    private static readonly string[] WhenItems = ["when you start moving", "right away"];
     private static readonly string[] EnemyItems = ["once it's within your attack range", "as soon as you target it"];
 
     /// <summary>Sliders: save once you let go, not on every frame while dragging.</summary>

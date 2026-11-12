@@ -33,6 +33,13 @@ internal sealed unsafe class ActionDismount : IDisposable
     /// <summary>An action is waiting to be used once you are off the mount (on-foot features hold back meanwhile).</summary>
     internal bool ReplayPending => _queued;
 
+    /// <summary>
+    /// When you (or a rotation plugin) last used an action or item; Giddy Up's own Sprint/Peloton/mount don't count.
+    /// Auto-mount waits until you've been idle for a GCD, so it doesn't cut into after-fight actions (one write per
+    /// action, nothing else).
+    /// </summary>
+    internal long LastActionAt { get; private set; }
+
     public ActionDismount(Plugin p)
     {
         _p = p;
@@ -56,6 +63,8 @@ internal sealed unsafe class ActionDismount : IDisposable
 
     private bool Detour(ActionManager* am, ActionType type, uint id, ulong target, uint extra, UseActionMode mode, uint combo, bool* outAreaTargeted)
     {
+        if (type is ActionType.Action or ActionType.Item && !Game.OwnCall && !_replaying)
+            LastActionAt = Environment.TickCount64;
         try
         {
             // Off the mount and another action came first (a rotation plugin, or you): it wins, no replay on top of it.

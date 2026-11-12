@@ -58,8 +58,25 @@ internal static unsafe class Game
     internal static bool Ready(ActionType type, uint id)
         => ActionManager.Instance()->GetActionStatus(type, id) == 0;
 
+    /// <summary>True while Giddy Up itself is using something (so it doesn't count as "you're still busy").</summary>
+    internal static bool OwnCall { get; private set; }
+
     internal static bool Use(ActionType type, uint id)
-        => ActionManager.Instance()->UseAction(type, id);
+    {
+        OwnCall = true;
+        try { return ActionManager.Instance()->UseAction(type, id); }
+        finally { OwnCall = false; }
+    }
+
+    /// <summary>
+    /// Your global cooldown right now, in ms, as the game computes it for a GCD action of your job (skill/spell speed
+    /// included). Without one (no job action known yet), the GCD's usual 2.5 s.
+    /// </summary>
+    internal static float GcdMs(uint gcdActionId)
+    {
+        var ms = gcdActionId != 0 ? ActionManager.GetAdjustedRecastTime(ActionType.Action, gcdActionId, true) : 0;
+        return ms > 0 ? ms : 2500f;
+    }
 
     internal static string ActionName(uint id)
         => Plugin.Data.GetExcelSheet<Lumina.Excel.Sheets.Action>().TryGetRow(id, out var a) ? a.Name.ExtractText() : $"#{id}";

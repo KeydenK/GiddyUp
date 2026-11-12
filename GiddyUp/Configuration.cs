@@ -17,10 +17,14 @@ public sealed class Configuration : Dalamud.Configuration.IPluginConfiguration
     public bool MountAfterZoneChange { get; set; } = true;
     public bool MountAfterCombat { get; set; } = true;
     public bool MountAfterGathering { get; set; } = true;
-    /// <summary>Wait until you start moving (default), or mount right away.</summary>
-    public MountTiming MountWhen { get; set; } = MountTiming.WhenMoving;
-    /// <summary>A pending mount (after a fight, a zone change...) is dropped if you haven't moved off within this time.</summary>
-    public float MountForgetSeconds { get; set; } = 60f;
+    public bool MountAfterCrafting { get; set; } = true;
+    public bool MountAfterTalking { get; set; } = true;
+    /// <summary>
+    /// Smart (default): mount as soon as you're done (no cast, no action from you or a rotation plugin for a GCD).
+    /// Off: wait <see cref="MountDelaySeconds"/> instead.
+    /// </summary>
+    public bool MountSmart { get; set; } = true;
+    public float MountDelaySeconds { get; set; } = 1f;
     public MountChoice MountKind { get; set; } = MountChoice.Roulette;
     public uint MountId { get; set; }
 
@@ -65,6 +69,5 @@ public sealed class Configuration : Dalamud.Configuration.IPluginConfiguration
     public bool DetailedLog { get; set; }
 }
 
-public enum MountTiming { WhenMoving = 0, RightAway = 1 }
 public enum MountChoice { Roulette = 0, Specific = 2 }
 public enum EnemyDismount { InRange = 0, WhenTargeted = 1 }

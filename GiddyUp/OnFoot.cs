@@ -8,7 +8,7 @@ using FFXIVClientStructs.FFXIV.Client.Game.UI;
 namespace GiddyUp;
 
 /// <summary>
-/// On foot, out of combat: Sprint, Peloton and auto-mount. Runs 10 times a second, and only while you're on foot
+/// On foot, out of combat: auto-mount, Sprint and Peloton. Runs 10 times a second, and only while you're on foot
 /// out of combat with one of these features on; otherwise it is unsubscribed and costs nothing.
 /// </summary>
 internal sealed unsafe class OnFoot : IDisposable
@@ -22,7 +22,7 @@ internal sealed unsafe class OnFoot : IDisposable
     private float _movingFor;
     private MoveMode? _lastMode;
 
-    // Auto-mount: why we want to mount (null = we don't), and the attempts so far.
+    // Auto-mount: why we want to mount (null = we don't), when that started, and the attempts so far.
     private string? _mountReason;
     private int _mountAttempts;
     private long _mountTriedAt;
@@ -95,6 +95,10 @@ internal sealed unsafe class OnFoot : IDisposable
         return Plugin.Data.GetExcelSheet<Lumina.Excel.Sheets.TerritoryType>().TryGetRow(Plugin.ClientState.TerritoryType, out var t) && t.Mount;
     }
 
+    /// <summary>
+    /// What ends (a zone change, a fight, gathering, crafting, a conversation) makes Giddy Up want to mount; starting
+    /// one of those again cancels it.
+    /// </summary>
     internal void OnCondition(ConditionFlag flag, bool value)
     {
         switch (flag)
@@ -105,24 +109,29 @@ internal sealed unsafe class OnFoot : IDisposable
                 _mountReason = null;
                 break;
             case ConditionFlag.BetweenAreas:
-                if (value) _mountReason = null;
-                else if (Config.MountAfterZoneChange) WantMount("zone change");
+                Trigger(value, Config.MountAfterZoneChange, "zone change");
                 break;
             case ConditionFlag.InCombat:
-                if (value) _mountReason = null;
-                else if (Config.MountAfterCombat) WantMount("after combat");
+                Trigger(value, Config.MountAfterCombat, "after combat");
                 break;
-            case ConditionFlag.Gathering:
-                if (value) _mountReason = null;
-                else if (Config.MountAfterGathering) WantMount("after gathering");
+            case ConditionFlag.Gathering or ConditionFlag.Fishing:
+                Trigger(value, Config.MountAfterGathering, "after gathering");
                 break;
-            // Talking to someone or using something: you're busy here, forget the pending mount.
-            case ConditionFlag.OccupiedInEvent or ConditionFlag.OccupiedInQuestEvent or ConditionFlag.OccupiedSummoningBell when value:
-                if (_mountReason != null)
-                    Plugin.Info($"Not mounting ({_mountReason}): you're busy here");
-                _mountReason = null;
+            case ConditionFlag.Crafting:
+                Trigger(value, Config.MountAfterCrafting, "after crafting");
+                break;
+            case ConditionFlag.OccupiedInEvent or ConditionFlag.OccupiedInQuestEvent:
+                Trigger(value, Config.MountAfterTalking, "after talking");
                 break;
         }
+    }
+
+    private void Trigger(bool started, bool enabled, string reason)
+    {
+        if (started)
+            _mountReason = null; // doing something here: no mount until it ends
+        else if (enabled)
+            WantMount(reason);
     }
 
     /// <summary>A Beeline trip started: Beeline decides mounting for the trip.</summary>
@@ -137,7 +146,23 @@ internal sealed unsafe class OnFoot : IDisposable
         _mountReason = reason;
         _mountAttempts = 0;
         _mountWantedAt = Environment.TickCount64;
-        Plugin.Info($"Will mount ({reason}){(Config.MountWhen == MountTiming.WhenMoving ? " when you start moving" : "")}");
+        Plugin.Info($"Will mount ({reason})" + (Config.MountSmart ? " once you're done" : $" in {Config.MountDelaySeconds:0.0} s"));
+    }
+
+    /// <summary>
+    /// Is it time to summon the mount? Smart (default): as soon as you're done, meaning no cast, no animation lock,
+    /// and no action used (by you or a rotation plugin: a Pictomancer painting motifs, buffs, heals...) for one of
+    /// your global cooldowns plus your measured action delay. A summon is a cast that would block those actions, so it
+    /// waits for them. Otherwise: your fixed delay.
+    /// </summary>
+    private bool TimeToMount(long now)
+    {
+        if (!Config.MountSmart)
+            return now - _mountWantedAt >= Config.MountDelaySeconds * 1000;
+        if (ActionManager.Instance()->AnimationLock > 0)
+            return false;
+        var idleMs = Game.GcdMs(_p.Range.ActionId) + Config.ActionLagSeconds * 1000 + TickMs;
+        return now - _p.ActionDismount.LastActionAt >= idleMs;
     }
 
     // ---------------- Every 100 ms ----------------
@@ -184,20 +209,23 @@ internal sealed unsafe class OnFoot : IDisposable
         var moving = moved / dt > Config.RunSpeed * 0.25f; // a fraction of your own learned speed
         _movingFor = moving ? _movingFor + dt : 0f;
 
-        var sprintLeft  = Game.StatusLeft(player, Game.SprintStatus);
-        var pelotonLeft = Game.StatusLeft(player, Game.PelotonStatus);
-        var jogLeft     = Game.StatusLeft(player, Game.JogStatus);
-        if (sprintLeft > 0)
-            _p.Speeds.SeenSprintDuration(sprintLeft);
-
-        // Learn how fast you go in each way of moving.
-        if (moving && !walking)
+        float sprintLeft = 0, pelotonLeft = 0, jogLeft = 0;
+        if (moving)
         {
-            var mode = sprintLeft > 0 ? MoveMode.Sprint : pelotonLeft > 0 ? MoveMode.Peloton : jogLeft > 0 ? MoveMode.Jog : MoveMode.Run;
-            if (_lastMode is { } last && last != mode)
-                _p.Speeds.Reset(last);
-            _lastMode = mode;
-            _p.Speeds.Slice(mode, moved, dt);
+            sprintLeft  = Game.StatusLeft(player, Game.SprintStatus);
+            pelotonLeft = Game.StatusLeft(player, Game.PelotonStatus);
+            jogLeft     = Game.StatusLeft(player, Game.JogStatus);
+            if (sprintLeft > 0)
+                _p.Speeds.SeenSprintDuration(sprintLeft);
+            // Learn how fast you go in each way of moving.
+            if (!walking)
+            {
+                var mode = sprintLeft > 0 ? MoveMode.Sprint : pelotonLeft > 0 ? MoveMode.Peloton : jogLeft > 0 ? MoveMode.Jog : MoveMode.Run;
+                if (_lastMode is { } last && last != mode)
+                    _p.Speeds.Reset(last);
+                _lastMode = mode;
+                _p.Speeds.Slice(mode, moved, dt);
+            }
         }
 
         // Effect of the last thing we used showed up? (also learns that delay)
@@ -215,43 +243,30 @@ internal sealed unsafe class OnFoot : IDisposable
                 return;
         }
 
-        // A wish to mount that waited too long (you stayed around) is dropped: walking to a vendor 10 minutes after a
-        // fight shouldn't summon a mount.
-        if (_mountReason != null && (now - _mountWantedAt) / 1000f > Config.MountForgetSeconds)
-        {
-            Plugin.Info($"Not mounting ({_mountReason}): you didn't move off for {Config.MountForgetSeconds:0} s");
-            _mountReason = null;
-            _p.Refresh(); // nothing else to watch for? then stop ticking
-            if (!_watching)
-                return;
-        }
-
-        // Standing still and no mount to summon right away: nothing to decide.
-        var reacted = _movingFor >= Config.MoveSeconds;
-        if (!reacted && !(_mountReason != null && Config.MountWhen == MountTiming.RightAway))
-            return;
+        if (_mountReason == null && !moving)
+            return; // standing still, nothing to summon: nothing to decide
 
         var c = Plugin.Condition;
-        if (walking || Game.IsMounted || c[ConditionFlag.InCombat] || Game.Busy() || _p.ActionDismount.ReplayPending)
+        if (Game.IsMounted || c[ConditionFlag.InCombat] || Game.Busy() || _p.ActionDismount.ReplayPending)
             return;
 
-        // 1. Mount, if we want to and the game allows it right here, right now.
-        var mountReady = _mountReason != null && Game.Ready(ActionType.GeneralAction, Game.MountRoulette);
-        if (mountReady && (reacted || Config.MountWhen == MountTiming.RightAway))
+        // 1. Mount, moving or not, once it's time (see TimeToMount) and the game allows it right here, right now.
+        //    While a mount is on its way, no Sprint/Peloton (mounting ends them anyway).
+        if (_mountReason != null && Game.Ready(ActionType.GeneralAction, Game.MountRoulette))
         {
-            if (MountAllowedHere()) // checked again: a duty may have started since
-                TryMount(now);
-            else
+            if (!MountAllowedHere()) // checked again: a duty may have started since
                 _mountReason = null;
+            else if (TimeToMount(now))
+                TryMount(now);
             return;
         }
-        if (!reacted)
+
+        if (walking || _movingFor < Config.MoveSeconds)
             return;
 
-        // 2. Sprint: when it's ready and faster than how you move right now. Not when a mount is about to be
-        //    summoned (mounting ends Sprint and Jog anyway).
+        // 2. Sprint: when it's ready and faster than how you move right now.
         var current = Math.Max(Config.RunSpeed, Math.Max(pelotonLeft > 0 ? Config.PelotonSpeed : 0, jogLeft > 0 ? Config.JogSpeed : 0));
-        if (Config.AutoSprint && !mountReady && sprintLeft <= 0 && Config.SprintSpeed > current
+        if (Config.AutoSprint && sprintLeft <= 0 && Config.SprintSpeed > current
             && Game.Ready(ActionType.GeneralAction, Game.Sprint) && !_p.Link.BeelineWillMount()
             && Game.Use(ActionType.GeneralAction, Game.Sprint))
         {
@@ -262,7 +277,7 @@ internal sealed unsafe class OnFoot : IDisposable
 
         // 3. Peloton: keep it up. It goes on in Sprint's last moments so it takes over when Sprint ends (no Jog then),
         //    and is renewed just before it runs out. "Last moments" = your measured action delay, twice, plus a tick.
-        if (!Config.KeepPeloton || mountReady)
+        if (!Config.KeepPeloton)
             return;
         var lead = Config.ActionLagSeconds * 2f + TickMs / 1000f * 2f;
         if (pelotonLeft > lead)
@@ -300,14 +315,14 @@ internal sealed unsafe class OnFoot : IDisposable
         }
         _mountAttempts++;
         _mountTriedAt = now;
-        var am = ActionManager.Instance();
         bool ok;
         if (Config.MountKind == MountChoice.Specific && Config.MountId != 0 && PlayerState.Instance()->IsMountUnlocked(Config.MountId)
-            && am->GetActionStatus(ActionType.Mount, Config.MountId) == 0)
-            ok = am->UseAction(ActionType.Mount, Config.MountId);
+            && Game.Ready(ActionType.Mount, Config.MountId))
+            ok = Game.Use(ActionType.Mount, Config.MountId);
         else
-            ok = am->UseAction(ActionType.GeneralAction, Game.MountRoulette);
-        Plugin.Info(ok ? $"Mounting ({_mountReason})" : $"Mount refused ({_mountReason}), try {_mountAttempts}");
+            ok = Game.Use(ActionType.GeneralAction, Game.MountRoulette);
+        Plugin.Info(ok ? $"Mounting ({_mountReason}, {(now - _mountWantedAt) / 1000f:0.0} s after)"
+                       : $"Mount refused ({_mountReason}), try {_mountAttempts}");
         if (ok)
             Wait(0, now);
     }

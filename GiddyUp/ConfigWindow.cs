@@ -159,6 +159,11 @@ internal sealed unsafe class ConfigWindow : Window
             Help("'Within your attack range': you stay on the mount while you approach, and land right where you can "
                + "attack. The range is the longest of the attacks you can always open with on your job (shown at the "
                + "top). Flying, Giddy Up starts landing early, by how long landing takes from your height.");
+            if (Config.EnemyMode == EnemyDismount.InRange)
+                Check("Melee jobs: land at melee range", () => Config.MeleeAtMeleeRange, v => Config.MeleeAtMeleeRange = v,
+                      "Tanks and melee DPS can open from about 20 y (Shield Lob, Tomahawk, Piercing Talon, Enpi...), so "
+                    + "that's where Giddy Up gets you off by default. Turn this on to stay mounted until you're in melee "
+                    + "range instead. Ranged jobs and casters aren't affected.");
             ImGui.Unindent();
         }
     }

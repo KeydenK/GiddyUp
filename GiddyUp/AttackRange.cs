@@ -17,7 +17,24 @@ namespace GiddyUp;
 /// </summary>
 internal sealed unsafe class AttackRange
 {
-    private readonly record struct Candidate(uint Id, byte Level, uint UnlockLink, string Name);
+    /// <summary>SheetRange -1 = "your weapon's reach" (melee for tanks/melee DPS, 25 y for bows/guns/chakrams).</summary>
+    private readonly record struct Candidate(uint Id, byte Level, uint UnlockLink, string Name, sbyte SheetRange);
+
+    private bool _meleeAtMelee;
+    /// <summary>
+    /// Option: jobs whose weapon reach is melee (tanks, melee DPS) use that instead of their ranged opener
+    /// (Shield Lob, Piercing Talon, Enpi...). Changing it recomputes.
+    /// </summary>
+    internal bool MeleeAtMelee
+    {
+        get => _meleeAtMelee;
+        set
+        {
+            if (_meleeAtMelee == value) return;
+            _meleeAtMelee = value;
+            _final = false;
+        }
+    }
 
     private readonly Dictionary<uint, Task<List<Candidate>>> _byJob = new();
     private uint _forJob = uint.MaxValue, _forLevel;
@@ -35,6 +52,8 @@ internal sealed unsafe class AttackRange
     private static readonly HashSet<byte> NeedsSomethingFirst = [11, 32, 46, 48, 49, 58, 75, 127];
     private const byte GlobalCooldownGroup = 58;
     private const uint BlueMage = 36;
+    /// <summary>Only tells melee weapons (3 y reach) from ranged ones (25 y); not a distance used for decisions.</summary>
+    private const float MeleeReachMax = 5f;
 
     /// <summary>Start the background scan for this job now (login, job change), so it's ready before you need it.</summary>
     internal void Prefetch()
@@ -98,7 +117,7 @@ internal sealed unsafe class AttackRange
                 || a.ActionCombo.RowId != 0
                 || !a.ClassJobCategory.IsValid || column.GetValue(a.ClassJobCategory.Value) is not true)
                 continue;
-            list.Add(new Candidate(a.RowId, a.ClassJobLevel, a.UnlockLink.RowId, a.Name.ExtractText()));
+            list.Add(new Candidate(a.RowId, a.ClassJobLevel, a.UnlockLink.RowId, a.Name.ExtractText(), a.Range));
         }
         return list;
     }
@@ -118,9 +137,21 @@ internal sealed unsafe class AttackRange
             for (var i = 0; i < 24; i++)
                 blueSet.Add(am->GetActiveBlueMageActionInSlot(i));
         }
+        // Option "melee jobs at melee range": if your weapon's reach is melee (the game says so for the "-1 = weapon
+        // reach" attacks: 3 y for melee weapons vs 25 y for bows, guns, chakrams), only those attacks count.
+        var weaponOnly = false;
+        if (_meleeAtMelee)
+        {
+            foreach (var c in candidates)
+                if (c.SheetRange == -1 && c.Level <= level)
+                {
+                    weaponOnly = ActionManager.GetActionRange(c.Id) <= MeleeReachMax;
+                    break;
+                }
+        }
         foreach (var c in candidates)
         {
-            if (c.Level > level || (blueSet != null && !blueSet.Contains(c.Id)))
+            if (c.Level > level || (blueSet != null && !blueSet.Contains(c.Id)) || (weaponOnly && c.SheetRange != -1))
                 continue;
             if (c.UnlockLink != 0 && (ui == null || !ui->IsUnlockLinkUnlockedOrQuestCompleted(c.UnlockLink, 0, true)))
                 continue;

@@ -31,6 +31,8 @@ public sealed class Configuration : Dalamud.Configuration.IPluginConfiguration
     public bool ReplayAction { get; set; } = true;
     public bool DismountOnEnemy { get; set; } = true;
     public EnemyDismount EnemyMode { get; set; } = EnemyDismount.InRange;
+    /// <summary>Tanks and melee DPS: use melee range instead of their ranged opener (Shield Lob, Piercing Talon...).</summary>
+    public bool MeleeAtMeleeRange { get; set; }
 
     // ---------------- Learned (defaults are only starting values) ----------------
     public float RunSpeed { get; set; } = 6f;

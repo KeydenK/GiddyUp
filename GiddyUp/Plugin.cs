@@ -51,7 +51,7 @@ public sealed class Plugin : IDalamudPlugin
         _cfg   = Config;
 
         Speeds         = new Speeds(this);
-        Range          = new AttackRange();
+        Range          = new AttackRange { MeleeAtMelee = Config.MeleeAtMeleeRange };
         OnFoot         = new OnFoot(this);
         Mounted        = new Mounted(this);
         ActionDismount = new ActionDismount(this);
@@ -113,6 +113,8 @@ public sealed class Plugin : IDalamudPlugin
     {
         PluginInterface.SavePluginConfig(Config);
         _configDirty = false;
+        Range.MeleeAtMelee = Config.MeleeAtMeleeRange; // recomputed at the next check if it changed
+        Range.Ensure();
         Refresh();
     }
 

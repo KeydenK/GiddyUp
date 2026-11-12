@@ -177,8 +177,9 @@ internal sealed unsafe class ConfigWindow : Window
             if (Config.EnemyMode == EnemyDismount.InRange)
                 Check("Melee jobs: land at melee range", () => Config.MeleeAtMeleeRange, v => Config.MeleeAtMeleeRange = v,
                       "Tanks and melee DPS can open from about 20 y (Shield Lob, Tomahawk, Piercing Talon, Enpi...), so "
-                    + "that's where Giddy Up gets you off by default. Turn this on to stay mounted until you're in melee "
-                    + "range instead. Ranged jobs and casters aren't affected.");
+                    + "that's where Giddy Up gets you off by default. Turn this on to stay mounted until you're within "
+                    + "reach of your close-range attacks instead: your weaponskills, or a line/cone like Doom Spike "
+                    + "(10 y) or Fuga (8 y) when you have one. Ranged jobs and casters aren't affected.");
             ImGui.Unindent();
         }
     }

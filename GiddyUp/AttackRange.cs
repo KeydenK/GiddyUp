@@ -17,8 +17,12 @@ namespace GiddyUp;
 /// </summary>
 internal sealed unsafe class AttackRange
 {
-    /// <summary>SheetRange -1 = "your weapon's reach" (melee for tanks/melee DPS, 25 y for bows/guns/chakrams).</summary>
-    private readonly record struct Candidate(uint Id, byte Level, uint UnlockLink, string Name, sbyte SheetRange);
+    /// <summary>
+    /// SheetRange -1 = "your weapon's reach" (melee for tanks/melee DPS, 25 y for bows/guns/chakrams).
+    /// SingleTarget: hits one target (ranged openers like Shield Lob are); otherwise a line/cone aimed at the target
+    /// (close-range AoEs like Doom Spike or Fuga).
+    /// </summary>
+    private readonly record struct Candidate(uint Id, byte Level, uint UnlockLink, sbyte SheetRange, bool SingleTarget);
 
     private bool _meleeAtMelee;
     /// <summary>
@@ -123,11 +127,12 @@ internal sealed unsafe class AttackRange
                 || a.ClassJobLevel == 0
                 || a.PrimaryCostType is not (0 or 3 or 96)                 // nothing, MP, or Pictomancer's basic paint
                 || NeedsSomethingFirst.Contains(a.SecondaryCostType)
+                || (a.SecondaryCostType == 113 && a.SecondaryCostValue.RowId != 0) // Soul Reaver moves (Guillotine...)
                 || a.CooldownGroup != GlobalCooldownGroup || a.AdditionalCooldownGroup != 0 || a.MaxCharges > 1
                 || a.ActionCombo.RowId != 0
                 || !a.ClassJobCategory.IsValid || column.GetValue(a.ClassJobCategory.Value) is not true)
                 continue;
-            list.Add(new Candidate(a.RowId, a.ClassJobLevel, a.UnlockLink.RowId, a.Name.ExtractText(), a.Range));
+            list.Add(new Candidate(a.RowId, a.ClassJobLevel, a.UnlockLink.RowId, a.Range, a.CastType == 1));
         }
         return list;
     }
@@ -143,37 +148,46 @@ internal sealed unsafe class AttackRange
         if (job == BlueMage)
         {
             blueSet = [];
-            var am = ActionManager.Instance();
+            var blue = ActionManager.Instance();
             for (var i = 0; i < 24; i++)
-                blueSet.Add(am->GetActiveBlueMageActionInSlot(i));
+                blueSet.Add(blue->GetActiveBlueMageActionInSlot(i));
         }
         // Option "melee jobs at melee range": if your weapon's reach is melee (the game says so for the "-1 = weapon
-        // reach" attacks: 3 y for melee weapons vs 25 y for bows, guns, chakrams), only those attacks count.
-        var weaponOnly = false;
+        // reach" attacks: 3 y for melee weapons vs 25 y for bows, guns, chakrams), the single-target ranged openers
+        // (Shield Lob, Piercing Talon...) don't count; your close-range attacks do (weapon reach, and lines/cones aimed
+        // at the target like Doom Spike or Fuga, which reach a few yalms further).
+        var am = ActionManager.Instance();
+        var closeOnly = false;
         if (_meleeAtMelee)
         {
             foreach (var c in candidates)
                 if (c.SheetRange == -1 && c.Level <= level)
                 {
-                    weaponOnly = ActionManager.GetActionRange(c.Id) <= MeleeReachMax;
+                    closeOnly = ActionManager.GetActionRange(c.Id) <= MeleeReachMax;
                     break;
                 }
         }
         foreach (var c in candidates)
         {
-            if (c.Level > level || (blueSet != null && !blueSet.Contains(c.Id)) || (weaponOnly && c.SheetRange != -1))
+            if (c.Level > level || (blueSet != null && !blueSet.Contains(c.Id))
+                || (closeOnly && c.SheetRange != -1 && c.SingleTarget))
                 continue;
             if (c.UnlockLink != 0 && (ui == null || !ui->IsUnlockLinkUnlockedOrQuestCompleted(c.UnlockLink, 0, true)))
                 continue;
-            // The game's own range for you (turns "weapon range" -1 into 25 y for bows/guns, 3 y for melee).
-            var range = ActionManager.GetActionRange(c.Id);
+            // What the button really does at your level (traits upgrade some: Fuga becomes Fuko, which only hits
+            // around you), and the game's own range for it (turns "weapon range" -1 into 25 y for bows/guns, 3 y melee).
+            var id = am->GetAdjustedActionId(c.Id);
+            var range = ActionManager.GetActionRange(id);
             if (range > best || (range == best && bestId == 0))
             {
                 best = range;
-                bestId = c.Id;
-                bestName = c.Name;
+                bestId = id;
             }
         }
+        if (bestId != 0 && bestId != ActionId)
+            bestName = Game.ActionName(bestId);
+        else if (bestId != 0)
+            bestName = ActionName;
         var changed = bestId != ActionId || best != Yalms;
         Yalms = best;
         ActionId = bestId;

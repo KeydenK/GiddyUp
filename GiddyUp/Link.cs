@@ -13,6 +13,7 @@ internal sealed class Link : IDisposable
 {
     private readonly Plugin _p;
     private readonly ICallGateProvider<bool> _handlesBoosts, _handlesEnemy;
+    private readonly ICallGateProvider<float> _stopRange;
     private readonly ICallGateProvider<object> _dismountedForCombat;
     private readonly ICallGateSubscriber<object> _tripStarted, _tripEnded;
     private readonly ICallGateSubscriber<bool> _isTrip, _willMount;
@@ -30,6 +31,16 @@ internal sealed class Link : IDisposable
         _dismountedForCombat = pi.GetIpcProvider<object>("GiddyUp.DismountedForCombat");
         _handlesBoosts.RegisterFunc(() => _p.Config.AutoSprint || _p.Config.KeepPeloton);
         _handlesEnemy.RegisterFunc(() => _p.Config.DismountOnEnemy);
+        // For Beeline's "stop the trip when you target an enemy": how close it should be first, per your settings
+        // (your attack range, melee option included), or -1 = at once ("as soon as you target it").
+        _stopRange = pi.GetIpcProvider<float>("GiddyUp.EnemyStopRange");
+        _stopRange.RegisterFunc(() =>
+        {
+            if (_p.Config.EnemyMode == EnemyDismount.WhenTargeted)
+                return -1f;
+            _p.Range.Recheck();
+            return _p.Range.Yalms;
+        });
 
         _tripStarted = pi.GetIpcSubscriber<object>("Beeline.TripStarted");
         _tripEnded   = pi.GetIpcSubscriber<object>("Beeline.TripEnded");
@@ -50,6 +61,7 @@ internal sealed class Link : IDisposable
         _tripEnded.Unsubscribe(OnTripEnded);
         _handlesBoosts.UnregisterFunc();
         _handlesEnemy.UnregisterFunc();
+        _stopRange.UnregisterFunc();
     }
 
     /// <summary>During a trip: will Beeline mount on this leg? (Asked only when about to use Sprint/Peloton.)</summary>

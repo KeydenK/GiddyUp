@@ -1,0 +1,145 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+<defs>
+  <linearGradient id="ffbg" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#1d3566"/>
+    <stop offset="1" stop-color="#080d1f"/>
+  </linearGradient>
+  <radialGradient id="ffspot" cx="0.5" cy="0.42" r="0.55">
+    <stop offset="0" stop-color="#9fd0ff" stop-opacity="0.30"/>
+    <stop offset="0.7" stop-color="#9fd0ff" stop-opacity="0.04"/>
+    <stop offset="1" stop-color="#9fd0ff" stop-opacity="0"/>
+  </radialGradient>
+  <linearGradient id="gold" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0" stop-color="#fff0b8"/>
+    <stop offset="0.45" stop-color="#d9a84e"/>
+    <stop offset="1" stop-color="#8a5f1c"/>
+  </linearGradient>
+  <linearGradient id="leather" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#e0894f"/>
+    <stop offset="0.55" stop-color="#b0532a"/>
+    <stop offset="1" stop-color="#6b2a12"/>
+  </linearGradient>
+  <linearGradient id="skirt" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#9c4422"/>
+    <stop offset="1" stop-color="#5a220e"/>
+  </linearGradient>
+  <linearGradient id="beebody" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#ffe27a"/>
+    <stop offset="1" stop-color="#e9a020"/>
+  </linearGradient>
+  <linearGradient id="wing" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#ffffff" stop-opacity="0.95"/>
+    <stop offset="1" stop-color="#9fd0ff" stop-opacity="0.75"/>
+  </linearGradient>
+  <filter id="shadow" x="-30%" y="-30%" width="160%" height="160%">
+    <feDropShadow dx="0" dy="10" stdDeviation="10" flood-color="#000" flood-opacity="0.45"/>
+  </filter>
+  <filter id="glow2" x="-50%" y="-50%" width="200%" height="200%">
+    <feGaussianBlur stdDeviation="5" result="b"/>
+    <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+  </filter>
+  <clipPath id="round"><rect width="512" height="512" rx="108"/></clipPath>
+  <clipPath id="bodyclip"><ellipse cx="-14" cy="18" rx="58" ry="48"/></clipPath>
+</defs>
+<g clip-path="url(#round)">
+  <rect width="512" height="512" fill="url(#ffbg)"/>
+  <rect width="512" height="512" fill="url(#ffspot)"/>
+
+  <!-- faint rolling hills -->
+  <g stroke="#9fd0ff" stroke-opacity="0.13" stroke-width="4" fill="none">
+    <path d="M0 452 C90 420 160 446 250 428 S400 450 512 418"/>
+    <path d="M0 488 C120 470 220 492 330 474 S460 486 512 470"/>
+  </g>
+
+  <!-- motion lines (galloping along) -->
+  <g filter="url(#glow2)" stroke="#ffd27a" stroke-linecap="round" fill="none">
+    <line x1="44"  y1="262" x2="124" y2="262" stroke-width="11"/>
+    <line x1="70"  y1="302" x2="132" y2="302" stroke-width="9" stroke-opacity="0.8"/>
+    <line x1="40"  y1="342" x2="118" y2="342" stroke-width="11"/>
+    <line x1="84"  y1="380" x2="134" y2="380" stroke-width="7" stroke-opacity="0.65"/>
+  </g>
+
+  <!-- dust puffs -->
+  <g fill="#cfe6ff" opacity="0.45">
+    <circle cx="150" cy="430" r="18"/>
+    <circle cx="118" cy="440" r="12"/>
+    <circle cx="94" cy="446" r="7"/>
+    <circle cx="176" cy="438" r="10"/>
+  </g>
+
+  <!-- saddle + rider, tilted a little: mid-gallop -->
+  <g transform="rotate(-7 256 320)">
+    <g filter="url(#shadow)">
+      <!-- stirrup strap and stirrup -->
+      <path d="M268 380 L268 414" stroke="#5a220e" stroke-width="12" stroke-linecap="round"/>
+      <path d="M246 414 L290 414 L298 440 Q268 452 238 440 Z" fill="none" stroke="url(#gold)" stroke-width="9" stroke-linejoin="round"/>
+      <!-- skirt / flap: wide and low -->
+      <path d="M130 322 L384 322 Q394 372 362 384 L156 384 Q122 374 130 322 Z" fill="url(#skirt)" stroke="#1b1233" stroke-width="8" stroke-linejoin="round"/>
+      <path d="M146 334 L368 334 Q374 366 352 372 L166 372 Q140 366 146 334 Z" fill="none" stroke="#e8b864" stroke-width="3" stroke-dasharray="7 7" opacity="0.8"/>
+      <!-- seat: cantle (back, left), dip, pommel and horn (front, right) -->
+      <path d="M136 304 Q140 246 170 246 Q200 248 214 284 Q256 306 304 286 Q334 270 346 242 Q352 224 370 220 Q392 218 388 240 Q380 270 374 302 Q368 336 326 342 L184 342 Q138 338 136 304 Z"
+            fill="url(#leather)" stroke="#1b1233" stroke-width="9" stroke-linejoin="round"/>
+      <!-- gold trim along the seat -->
+      <path d="M152 300 Q156 262 172 262 Q192 264 204 292 Q256 320 312 296 Q340 280 352 252" fill="none" stroke="url(#gold)" stroke-width="7" stroke-linecap="round"/>
+      <!-- horn knob -->
+      <circle cx="376" cy="222" r="14" fill="url(#gold)" stroke="#1b1233" stroke-width="7"/>
+      <!-- leather shine -->
+      <path d="M160 316 Q200 326 236 324" stroke="#f3b07c" stroke-width="6" stroke-linecap="round" fill="none" opacity="0.6"/>
+    </g>
+
+    <!-- the bee from Beeline, riding -->
+    <g transform="translate(258 236) scale(0.82)" filter="url(#shadow)">
+      <!-- wings (behind) -->
+      <g stroke="#1b1233" stroke-width="7" stroke-linejoin="round">
+        <path d="M-34 -40 C-78 -112 -10 -136 -2 -62 Z" fill="url(#wing)"/>
+        <path d="M2 -46 C10 -126 76 -110 26 -44 Z" fill="url(#wing)"/>
+      </g>
+      <!-- stinger -->
+      <path d="M-70 16 L-96 22 L-70 30 Z" fill="#1b1233" stroke="#1b1233" stroke-width="5" stroke-linejoin="round"/>
+      <!-- chubby body -->
+      <ellipse cx="-14" cy="18" rx="62" ry="52" fill="url(#beebody)" stroke="#1b1233" stroke-width="9"/>
+      <g clip-path="url(#bodyclip)" fill="#3a2a1a">
+        <rect x="-52" y="-40" width="17" height="120" rx="8"/>
+        <rect x="-20" y="-40" width="17" height="120" rx="8"/>
+      </g>
+      <path d="M-50 -8 Q-24 -26 4 -20" stroke="#fff6c8" stroke-width="7" stroke-linecap="round" fill="none" opacity="0.7"/>
+      <!-- legs hugging the saddle -->
+      <g stroke="#1b1233" stroke-width="6" stroke-linecap="round" fill="none">
+        <path d="M-30 64 Q-36 78 -26 86"/>
+        <path d="M-2 66 Q4 80 14 84"/>
+      </g>
+      <!-- antennae with hearts (as on Beeline's bee) -->
+      <g stroke="#1b1233" stroke-width="6" stroke-linecap="round" fill="none">
+        <path d="M44 -32 Q46 -62 30 -78"/>
+        <path d="M64 -26 Q82 -52 100 -58"/>
+      </g>
+      <path d="M30 -72 C22 -84 6 -76 16 -66 L30 -54 L44 -66 C54 -76 38 -84 30 -72 Z" fill="#ff6f8c" stroke="#1b1233" stroke-width="4" transform="translate(0 -10) scale(0.9) translate(3 -6)"/>
+      <path d="M100 -52 C92 -64 76 -56 86 -46 L100 -34 L114 -46 C124 -56 108 -64 100 -52 Z" fill="#ff6f8c" stroke="#1b1233" stroke-width="4" transform="translate(0 -14)"/>
+      <!-- big round head -->
+      <circle cx="54" cy="4" r="46" fill="url(#beebody)" stroke="#1b1233" stroke-width="9"/>
+      <!-- happy squinting eyes -->
+      <path d="M34 -2 Q44 -14 54 -2" stroke="#1b1233" stroke-width="7" stroke-linecap="round" fill="none"/>
+      <path d="M66 -4 Q76 -16 86 -4" stroke="#1b1233" stroke-width="7" stroke-linecap="round" fill="none"/>
+      <!-- blush -->
+      <ellipse cx="32" cy="18" rx="10" ry="6" fill="#ff7f9e" opacity="0.75"/>
+      <ellipse cx="88" cy="16" rx="10" ry="6" fill="#ff7f9e" opacity="0.75"/>
+      <!-- big open "giddy up!" smile -->
+      <path d="M48 16 Q60 38 74 15 Z" fill="#7a1f33" stroke="#1b1233" stroke-width="5" stroke-linejoin="round"/>
+      <!-- little arm holding the reins -->
+      <path d="M28 36 Q50 52 70 46" stroke="#1b1233" stroke-width="7" stroke-linecap="round" fill="none"/>
+    </g>
+    <!-- reins from the bee's arm to the horn -->
+    <path d="M316 274 Q352 268 370 232" stroke="#1b1233" stroke-width="6" stroke-linecap="round" fill="none"/>
+    <path d="M316 274 Q352 268 370 232" stroke="#e8b864" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+  </g>
+
+  <!-- sparkles -->
+  <path d="M70 74 L74.32 87.68 L88 92 L74.32 96.32 L70 110 L65.68 96.32 L52 92 L65.68 87.68 Z" fill="#fff0c8"/>
+  <path d="M452 323 L455.12 332.88 L465 336 L455.12 339.12 L452 349 L448.88 339.12 L439 336 L448.88 332.88 Z" fill="#fff0c8" opacity="0.8"/>
+  <path d="M440 70 L442.6 78.4 L451 81 L442.6 83.6 L440 92 L437.4 83.6 L429 81 L437.4 78.4 Z" fill="#fff0c8" opacity="0.6"/>
+
+  <!-- gold frame -->
+  <rect x="14" y="14" width="484" height="484" rx="94" fill="none" stroke="url(#gold)" stroke-width="7"/>
+  <rect x="25" y="25" width="462" height="462" rx="84" fill="none" stroke="#d9a84e" stroke-opacity="0.35" stroke-width="2"/>
+</g>
+</svg>

@@ -22,6 +22,7 @@ public sealed class Plugin : IDalamudPlugin
     [PluginService] internal static IObjectTable            ObjectTable     { get; private set; } = null!;
     [PluginService] internal static ITargetManager          TargetManager   { get; private set; } = null!;
     [PluginService] internal static IGameInteropProvider    Hooks           { get; private set; } = null!;
+    [PluginService] internal static IToastGui               Toast           { get; private set; } = null!;
 
     internal Configuration Config { get; }
     private static Configuration? _cfg;

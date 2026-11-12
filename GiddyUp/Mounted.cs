@@ -32,6 +32,7 @@ internal sealed unsafe class Mounted : IDisposable
     private Vector3 _stillPos;       // where you were at the last stillness check (flying)
     private long _stillAt;
     private bool _still = true;
+    private bool _toldStill;         // "hold still to land" shown (or the Beeline trip stopped) for this enemy
 
     // A dismount Giddy Up started (for an enemy or an action): when, from what height, and how it went.
     private long _dismountAt;        // first press (0 = none in progress)
@@ -41,6 +42,7 @@ internal sealed unsafe class Mounted : IDisposable
     private long _secondPressAt;     // the "get off" press after landing
     private long _lastPressAt;       // last press of any kind (for the 1.5 s between presses)
     private int _presses;            // presses for this target (a cap, so nothing spams)
+    private int _landingPresses;     // presses before touching down (more than one = the landing stalled)
 
     private float _height = float.NaN; // above the ground right below you (NaN = none found), refreshed 4x/s while needed
     private long _heightAt;
@@ -88,7 +90,7 @@ internal sealed unsafe class Mounted : IDisposable
         if (flag == ConditionFlag.Mounted && !value)
         {
             var took = (now - _dismountAt) / 1000f;
-            if (_dismountInFlight && _touchdownAt != 0 && !float.IsNaN(_dismountHeight))
+            if (_dismountInFlight && _touchdownAt != 0 && !float.IsNaN(_dismountHeight) && _landingPresses == 1)
                 _p.Speeds.LearnLanding(_dismountHeight, (_touchdownAt - _dismountAt) / 1000f,
                                        (now - (_secondPressAt != 0 ? _secondPressAt : _touchdownAt)) / 1000f);
             else if (!_dismountInFlight)
@@ -108,8 +110,11 @@ internal sealed unsafe class Mounted : IDisposable
     internal void NoteDismount(long now)
     {
         _lastPressAt = now;
+        if (_touchdownAt == 0)
+            _landingPresses++;
         if (_dismountAt != 0)
             return;
+        _landingPresses = 1;
         _dismountInFlight = Plugin.Condition[ConditionFlag.InFlight];
         _dismountHeight = _dismountInFlight ? HeightAboveLanding() : 0f;
         _dismountAt = now;
@@ -176,16 +181,10 @@ internal sealed unsafe class Mounted : IDisposable
             return;
         var flying = Plugin.Condition[ConditionFlag.InFlight];
 
-        // Optionally wait until you stop moving: flying (moving stops the landing) and riding have their own setting.
-        if ((flying ? Config.FlyDismountWhenStill : Config.RideDismountWhenStill) && !IsStill(player, now))
-        {
-            Now = State.WaitingStill;
-            return;
-        }
-
         if (Config.EnemyMode == EnemyDismount.WhenTargeted)
         {
-            DoDismount(now, 0f, 0f, flying);
+            if (!WaitStill(player, now, flying))
+                DoDismount(now, 0f, 0f, flying);
             return;
         }
 
@@ -230,7 +229,33 @@ internal sealed unsafe class Mounted : IDisposable
                 return;
             }
         }
+        if (WaitStill(player, now, flying))
+            return;
         DoDismount(now, range, lead, flying);
+    }
+
+    /// <summary>
+    /// Time to dismount, but you're moving: flying, always wait (moving stops the landing); riding, if that option is
+    /// on. Flying, Giddy Up tells you once per enemy ("hold still to land") and stops a Beeline trip, which is what
+    /// moves you then. True = wait.
+    /// </summary>
+    private bool WaitStill(FFXIVClientStructs.FFXIV.Client.Game.Character.BattleChara* player, long now, bool flying)
+    {
+        if (!(flying || Config.RideDismountWhenStill) || IsStill(player, now))
+            return false;
+        Now = State.WaitingStill;
+        if (flying && !_toldStill)
+        {
+            _toldStill = true;
+            if (_p.Link.TripActive)
+            {
+                Plugin.Info("Enemy in range: stopping the Beeline trip so you can land");
+                _p.Link.DismountedForCombat(); // the trip stops, and with it the movement
+            }
+            else
+                Plugin.Toast.ShowNormal("Giddy Up: hold still to land");
+        }
+        return true;
     }
 
     /// <summary>Are you holding still? (Moved less than a fraction of your own running speed over 0.25 s.)</summary>
@@ -265,6 +290,7 @@ internal sealed unsafe class Mounted : IDisposable
         _p.Range.Recheck(); // picks again from the cached list: newly unlocked actions count
         _enemy = target;
         _presses = 0;
+        _toldStill = false;
         Plugin.Info($"Enemy targeted; attack range {_p.Range.Yalms:0} y ({_p.Range.ActionName})");
     }
 

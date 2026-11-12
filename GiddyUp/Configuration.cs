@@ -46,8 +46,6 @@ public sealed class Configuration : Dalamud.Configuration.IPluginConfiguration
     public EnemyDismount EnemyMode { get; set; } = EnemyDismount.InRange;
     /// <summary>Tanks and melee DPS: use melee range instead of their ranged opener (Shield Lob, Piercing Talon...).</summary>
     public bool MeleeAtMeleeRange { get; set; }
-    /// <summary>Flying: dismount only once you stop moving (moving stops the landing anyway).</summary>
-    public bool FlyDismountWhenStill { get; set; } = true;
     /// <summary>Riding on the ground: dismount only once you stop moving.</summary>
     public bool RideDismountWhenStill { get; set; }
 

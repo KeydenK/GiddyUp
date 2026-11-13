@@ -78,9 +78,11 @@ internal sealed unsafe class Mounted : IDisposable
 
     internal void OnCondition(ConditionFlag flag, bool value)
     {
+        var now = Environment.TickCount64;
+        if (_cantLandAt != 0 && !value && flag is ConditionFlag.InFlight or ConditionFlag.Mounted)
+            HideCantLand(now); // touched down / off the mount
         if (_dismountAt == 0)
             return;
-        var now = Environment.TickCount64;
         if (DismountStale(now))
             return;
         // Landed after a dismount Giddy Up started in the air: press again to get off (the game's second step).
@@ -239,6 +241,8 @@ internal sealed unsafe class Mounted : IDisposable
         if (flying)
         {
             RefreshHeight(now);
+            if (_cantLandAt != 0 && !float.IsNaN(_height) && !float.IsNaN(_cantLandHeight) && _cantLandHeight - _height > 0.5f)
+                HideCantLand(now); // going down: the landing works now
             lead = _p.Speeds.LandingSeconds(float.IsNaN(_height) ? 0f : _height) * Math.Max(0f, _closing);
         }
         var range = _p.Range.Yalms;
@@ -310,31 +314,43 @@ internal sealed unsafe class Mounted : IDisposable
     /// course. Only within a few seconds of showing it (the game's message line shows one message at a time; after
     /// that, whatever is there isn't ours).
     /// </summary>
-    private void HideNotice(long now)
+    private void HideNotice(long now) => HideToast(ref _noticeAt, now, NoticeText, "You hold still");
+
+    /// <summary>The landing is under way (you're going down, touched down, or got off): "can't land here" is over.</summary>
+    private void HideCantLand(long now) => HideToast(ref _cantLandAt, now, CantLandText, "Landing");
+
+    /// <summary>
+    /// Takes one of Giddy Up's messages off the screen right away instead of letting it run its course. Only within
+    /// a few seconds of showing it, and only the window that shows its very text (so never anything else).
+    /// </summary>
+    private static void HideToast(ref long shownAt, long now, string text, string why)
     {
-        if (_noticeAt == 0)
+        if (shownAt == 0)
             return;
-        var ours = now - _noticeAt < 3000;
-        _noticeAt = 0;
+        var ours = now - shownAt < 5000;
+        shownAt = 0;
         if (!ours)
             return;
-        var unit = FindNotice();
+        var unit = FindNotice(text);
         if (unit != null)
         {
             unit->Hide(false, false, 0);
-            Plugin.Info($"You hold still: notice taken off the screen ({System.Text.Encoding.UTF8.GetString(unit->Name).Split('\0')[0]})");
+            Plugin.Info($"{why}: notice taken off the screen ({System.Text.Encoding.UTF8.GetString(unit->Name).Split('\0')[0]})");
         }
         else
-            Plugin.Info("You hold still: notice already gone");
+            Plugin.Info($"{why}: notice already gone");
     }
 
     private const string NoticeText = "hold still to land";
+    private const string CantLandText = "can't land here, move a little";
+    private long _cantLandAt;          // when "can't land here" was shown (0 = not on screen)
+    private float _cantLandHeight;     // your height then (NaN = unknown)
 
     /// <summary>
     /// The game window currently showing our notice: the visible one with a text containing it. Looked up only when
     /// taking the notice off (once per notice), so which window the game uses for it doesn't matter.
     /// </summary>
-    private static FFXIVClientStructs.FFXIV.Component.GUI.AtkUnitBase* FindNotice()
+    private static FFXIVClientStructs.FFXIV.Component.GUI.AtkUnitBase* FindNotice(string text)
     {
         var stage = FFXIVClientStructs.FFXIV.Component.GUI.AtkStage.Instance();
         if (stage == null || stage->RaptureAtkUnitManager == null)
@@ -351,7 +367,7 @@ internal sealed unsafe class Mounted : IDisposable
                 var node = unit->UldManager.NodeList[n];
                 if (node == null || node->Type != FFXIVClientStructs.FFXIV.Component.GUI.NodeType.Text)
                     continue;
-                if (((FFXIVClientStructs.FFXIV.Component.GUI.AtkTextNode*)node)->NodeText.ToString().Contains(NoticeText))
+                if (((FFXIVClientStructs.FFXIV.Component.GUI.AtkTextNode*)node)->NodeText.ToString().Contains(text))
                     return unit;
             }
         }
@@ -434,7 +450,11 @@ internal sealed unsafe class Mounted : IDisposable
             _toldCantLand = true;
             Plugin.Info($"The game didn't land you ({(float.IsNaN(_height) ? "no floor found below" : $"{_height:0.0} y above the floor")}): pressing again");
             if (Config.CantLandNotice)
-                Plugin.Toast.ShowNormal("Giddy Up: can't land here, move a little");
+            {
+                Plugin.Toast.ShowNormal("Giddy Up: " + CantLandText);
+                _cantLandAt = now;
+                _cantLandHeight = _height;
+            }
         }
         _presses++;
         DismountedFor = (nint)_enemy;

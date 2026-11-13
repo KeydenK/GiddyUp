@@ -59,7 +59,8 @@ internal sealed class Speeds
         Take(MoveMode.Peloton, "Peloton", v => Config.PelotonSpeed = v);
         if (d.TryGetValue("SprintSeconds", out var sec))
             SeenSprintDuration(sec);
-        Plugin.Info("Speeds from Beeline: " + string.Join(", ", Enum.GetValues<MoveMode>().Where(FromBeeline)));
+        var shared = string.Join(", ", Enum.GetValues<MoveMode>().Where(FromBeeline));
+        Plugin.Info("Speeds from Beeline: " + (shared.Length > 0 ? shared : "none yet (Giddy Up learns them itself meanwhile)"));
         _p.MarkDirty();
     }
 

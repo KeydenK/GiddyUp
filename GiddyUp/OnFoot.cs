@@ -43,7 +43,6 @@ internal sealed unsafe class OnFoot : IDisposable
     private Configuration Config => _p.Config;
 
     internal string? MountReason => _mountReason;
-    internal bool MountWhenMoving => _mountTiming == MountTiming.WhenMoving;
 
     /// <summary>
     /// Your target when Giddy Up last summoned a mount, and when: an enemy you target while the mount is being
@@ -96,16 +95,30 @@ internal sealed unsafe class OnFoot : IDisposable
     }
 
     /// <summary>
-    /// Mounts allowed here: the zone allows them (read at the moment, not cached, so the order of zone-change events
-    /// doesn't matter), and you're not in a duty or PvP.
+    /// Mounts allowed here: the zone allows them, and you're not in a duty (field operations like Eureka, Bozja,
+    /// Occult Crescent and the Diadem count as duties but allow mounts: those are fine) or PvP. The zone's game data
+    /// is read once per zone (keyed on the zone id itself, so the order of zone-change events doesn't matter).
     /// </summary>
     private static bool MountAllowedHere()
     {
-        var c = Plugin.Condition;
-        if (c[ConditionFlag.BoundByDuty] || c[ConditionFlag.BoundByDuty56] || c[ConditionFlag.BoundByDuty95] || Plugin.ClientState.IsPvP)
+        if (Plugin.ClientState.IsPvP)
             return false;
-        return Plugin.Data.GetExcelSheet<Lumina.Excel.Sheets.TerritoryType>().TryGetRow(Plugin.ClientState.TerritoryType, out var t) && t.Mount;
+        var zone = Plugin.ClientState.TerritoryType;
+        if (zone != _zoneRead)
+        {
+            _zoneRead = zone;
+            _zoneMount = Plugin.Data.GetExcelSheet<Lumina.Excel.Sheets.TerritoryType>().TryGetRow(zone, out var t) && t.Mount;
+            _zoneField = _zoneMount && t.TerritoryIntendedUse.RowId is 26 or 38 or 41 or 47 or 48 or 61;
+        }
+        var c = Plugin.Condition;
+        if (!_zoneField && (c[ConditionFlag.BoundByDuty] || c[ConditionFlag.BoundByDuty56] || c[ConditionFlag.BoundByDuty95]))
+            return false;
+        return _zoneMount;
     }
+
+    // TerritoryIntendedUse ids from the game data: 26/38/47 the Diadem, 41 Eureka, 48 Bozja/Zadnor, 61 Occult Crescent.
+    private static uint _zoneRead = uint.MaxValue;
+    private static bool _zoneMount, _zoneField;
 
     /// <summary>
     /// What ends (a zone change, a fight, gathering, crafting, a conversation) makes Giddy Up want to mount; starting

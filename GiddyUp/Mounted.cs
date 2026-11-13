@@ -31,7 +31,7 @@ internal sealed unsafe class Mounted : IDisposable
     private bool _losBlocked;        // last line-of-sight check said no (kept until the next check)
     private Vector3 _stillPos;       // where you were at the last stillness check (flying)
     private long _stillAt;
-    private bool _still = true;
+    private bool _still;
     private bool _toldStill;         // "hold still to land" shown (or the Beeline trip stopped) for this enemy
 
     // A dismount Giddy Up started (for an enemy or an action): when, from what height, and how it went.
@@ -77,6 +77,8 @@ internal sealed unsafe class Mounted : IDisposable
         if (_dismountAt == 0)
             return;
         var now = Environment.TickCount64;
+        if (DismountStale(now))
+            return;
         // Landed after a dismount Giddy Up started in the air: press again to get off (the game's second step).
         if (flag == ConditionFlag.InFlight && !value && _dismountInFlight)
         {
@@ -109,6 +111,7 @@ internal sealed unsafe class Mounted : IDisposable
     /// </summary>
     internal void NoteDismount(long now)
     {
+        DismountStale(now);
         _lastPressAt = now;
         if (_touchdownAt == 0)
             _landingPresses++;
@@ -120,6 +123,25 @@ internal sealed unsafe class Mounted : IDisposable
         _dismountAt = now;
         _touchdownAt = 0;
         _secondPressAt = 0;
+    }
+
+    /// <summary>
+    /// A dismount Giddy Up started that never finished (you moved, which stops a landing, and flew on): forgotten once
+    /// it's had twice its expected time (learned landing + get-off) plus a second, so a later landing of your own isn't
+    /// taken for it (no surprise "get off" press, nothing wrong learned). True = it was stale and is now forgotten.
+    /// </summary>
+    private bool DismountStale(long now)
+    {
+        if (_dismountAt == 0)
+            return false;
+        var budget = _p.Speeds.LandingSeconds(_dismountInFlight && !float.IsNaN(_dismountHeight) ? _dismountHeight : 0f) * 2000 + 1000;
+        if (now - _lastPressAt <= budget)
+            return false;
+        Plugin.Info("The last dismount didn't happen (you moved on): forgotten");
+        _dismountAt = 0;
+        _touchdownAt = 0;
+        _secondPressAt = 0;
+        return true;
     }
 
     private void Start()
@@ -249,9 +271,14 @@ internal sealed unsafe class Mounted : IDisposable
     /// </summary>
     private bool WaitStill(FFXIVClientStructs.FFXIV.Client.Game.Character.BattleChara* player, long now, bool flying)
     {
-        if (!(flying || Config.RideDismountWhenStill) || IsStill(player, now))
+        if (!(flying || Config.RideDismountWhenStill))
+            return false;
+        var still = IsStill(player, now);
+        if (still == true)
             return false;
         Now = State.WaitingStill;
+        if (still == null)
+            return true; // not measured yet: look again in a quarter of a second, say nothing meanwhile
         if (flying && !_toldStill)
         {
             _toldStill = true;
@@ -266,18 +293,26 @@ internal sealed unsafe class Mounted : IDisposable
         return true;
     }
 
-    /// <summary>Are you holding still? (Moved less than a fraction of your own running speed over 0.25 s.)</summary>
-    private bool IsStill(FFXIVClientStructs.FFXIV.Client.Game.Character.BattleChara* player, long now)
+    /// <summary>
+    /// Are you holding still? (Moved less than a fraction of your own running speed over 0.25 s, flat: going down
+    /// during a landing isn't moving.) Null = not known yet (no recent sample: one is taken now, the answer comes
+    /// a quarter of a second later).
+    /// </summary>
+    private bool? IsStill(FFXIVClientStructs.FFXIV.Client.Game.Character.BattleChara* player, long now)
     {
-        if (now - _stillAt < 250)
+        var since = now - _stillAt;
+        if (_stillAt != 0 && since < 250)
             return _still;
         var pos = player->Position;
-        var moved = Vector3.Distance(pos, _stillPos);
-        var seconds = (now - _stillAt) / 1000f;
-        _still = _stillAt != 0 && seconds < 1f && moved / seconds < Config.RunSpeed * 0.25f;
+        var fresh = _stillAt != 0 && since < 1000;
+        if (fresh)
+        {
+            var moved = Vector2.Distance(new Vector2(pos.X, pos.Z), new Vector2(_stillPos.X, _stillPos.Z));
+            _still = moved / (since / 1000f) < Config.RunSpeed * 0.25f;
+        }
         _stillPos = pos;
         _stillAt = now;
-        return _still;
+        return fresh ? _still : null;
     }
 
     private void OnTargetChanged(GameObject* target)

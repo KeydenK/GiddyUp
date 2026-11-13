@@ -59,14 +59,10 @@ internal sealed unsafe class AttackRange
     /// <summary>ClassJob.Role in the game data: 1 tank, 2 melee DPS, 3 ranged DPS (physical and magical), 4 healer.</summary>
     private const byte TankRole = 1, MeleeRole = 2;
     private const uint AutoAttack = 7;
+    private readonly HashSet<uint> _blueSet = new(24); // reused: Blue Mage is rechecked every few seconds
 
     /// <summary>Start the background scan for this job now (login, job change), so it's ready before you need it.</summary>
-    internal void Prefetch()
-    {
-        var player = Game.Player;
-        if (player != null)
-            Candidates(player->ClassJob);
-    }
+    internal void Prefetch(uint job) => Candidates(job);
 
     /// <summary>
     /// Picks again from the cached candidates (a dozen or so; microseconds), e.g. when you target an enemy: an action
@@ -148,7 +144,8 @@ internal sealed unsafe class AttackRange
         HashSet<uint>? blueSet = null;
         if (job == BlueMage)
         {
-            blueSet = [];
+            blueSet = _blueSet;
+            blueSet.Clear();
             var blue = ActionManager.Instance();
             for (var i = 0; i < 24; i++)
                 blueSet.Add(blue->GetActiveBlueMageActionInSlot(i));

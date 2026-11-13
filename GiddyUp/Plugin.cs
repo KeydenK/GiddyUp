@@ -165,7 +165,7 @@ public sealed class Plugin : IDalamudPlugin
     // runs in the background; these only make sure the right watchers run.
     private void OnClassJobChanged(uint classJobId)
     {
-        Range.Prefetch();
+        Range.Prefetch(classJobId); // the event's job: the character may still report the old one
         Refresh();
     }
 

@@ -12,7 +12,7 @@ namespace GiddyUp;
 internal sealed class Link : IDisposable
 {
     private readonly Plugin _p;
-    private readonly ICallGateProvider<bool> _handlesBoosts, _handlesEnemy;
+    private readonly ICallGateProvider<bool> _handlesSprint, _handlesPeloton, _handlesEnemy;
     private readonly ICallGateProvider<float> _stopRange;
     private readonly ICallGateProvider<object> _dismountedForCombat;
     private readonly ICallGateSubscriber<object> _tripStarted, _tripEnded;
@@ -26,10 +26,13 @@ internal sealed class Link : IDisposable
     {
         _p = p;
         var pi = Plugin.PluginInterface;
-        _handlesBoosts = pi.GetIpcProvider<bool>("GiddyUp.HandlesSpeedBuffs");
+        // Each buff separately: Beeline only leaves to Giddy Up what Giddy Up actually uses.
+        _handlesSprint  = pi.GetIpcProvider<bool>("GiddyUp.HandlesSprint");
+        _handlesPeloton = pi.GetIpcProvider<bool>("GiddyUp.HandlesPeloton");
         _handlesEnemy  = pi.GetIpcProvider<bool>("GiddyUp.HandlesEnemyDismount");
         _dismountedForCombat = pi.GetIpcProvider<object>("GiddyUp.DismountedForCombat");
-        _handlesBoosts.RegisterFunc(() => _p.Config.AutoSprint || _p.Config.KeepPeloton);
+        _handlesSprint.RegisterFunc(() => _p.Config.AutoSprint);
+        _handlesPeloton.RegisterFunc(() => _p.Config.KeepPeloton);
         _handlesEnemy.RegisterFunc(() => _p.Config.DismountOnEnemy);
         // For Beeline's "stop the trip when you target an enemy": how close it should be first, per your settings
         // (your attack range, melee option included), or -1 = at once ("as soon as you target it").
@@ -60,12 +63,12 @@ internal sealed class Link : IDisposable
     {
         _tripStarted.Unsubscribe(OnTripStarted);
         _tripEnded.Unsubscribe(OnTripEnded);
-        _handlesBoosts.UnregisterFunc();
+        _handlesSprint.UnregisterFunc();
+        _handlesPeloton.UnregisterFunc();
         _handlesEnemy.UnregisterFunc();
         _stopRange.UnregisterFunc();
     }
 
-    /// <summary>During a trip: will Beeline mount on this leg? (Asked only when about to use Sprint/Peloton.)</summary>
     /// <summary>
     /// During a Beeline trip: does its "Stop the trip when you target an enemy" option let a targeted enemy end the
     /// trip? Off: Giddy Up leaves you on the mount for the trip (you break it by moving yourself). Asked when a trip
@@ -81,6 +84,7 @@ internal sealed class Link : IDisposable
         catch { TripStopsForEnemies = true; } // an older Beeline without the question: as before
     }
 
+    /// <summary>During a trip: will Beeline mount on this leg? (Asked only when about to use Sprint/Peloton.)</summary>
     internal bool BeelineWillMount()
     {
         if (!TripActive)
@@ -107,6 +111,7 @@ internal sealed class Link : IDisposable
     private void OnTripEnded()
     {
         TripActive = false;
+        TripStopsForEnemies = true;
         PullSpeeds(); // Beeline saves what it learned when a trip ends
     }
 

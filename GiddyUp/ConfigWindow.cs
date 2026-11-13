@@ -65,6 +65,7 @@ internal sealed unsafe class ConfigWindow : Window
                 Mounted.State.Approaching => $"Mounted: enemy at {m.Gap:0} y, dismounting at {m.DismountAt:0} y",
                 Mounted.State.NoSight     => "Mounted: enemy in range, waiting for line of sight",
                 Mounted.State.WaitingStill => "Mounted: enemy targeted, dismounting once you stop moving",
+                Mounted.State.OnTrip       => "Mounted: enemy targeted, staying on the Beeline trip (its option is off)",
                 _                         => "Mounted",
             });
         }
@@ -197,8 +198,10 @@ internal sealed unsafe class ConfigWindow : Window
                     + "that's where Giddy Up gets you off by default. Turn this on to stay mounted until you're within "
                     + "reach of your close-range attacks instead: your weaponskills, or a line/cone like Doom Spike "
                     + "(10 y) or Fuga (8 y) when you have one. Ranged jobs and casters aren't affected.");
-            Hint("Flying: hold still to land. Moving stops the game's landing, so Giddy Up waits until you stop, and "
-               + "stops a Beeline trip to let you land.");
+            Hint("Flying: hold still to land. Moving stops the game's landing, so Giddy Up waits until you stop.");
+            Hint("On a Beeline trip, Beeline's \"Stop the trip when you target an enemy\" decides: off, you stay on the "
+               + "trip (move yourself to break it, then Giddy Up dismounts you as usual); on, the trip stops once the "
+               + "enemy is in range and Giddy Up gets you off.");
             Check("Remind me on screen", () => Config.HoldStillNotice, v => Config.HoldStillNotice = v,
                   "Shows \"hold still to land\" once per enemy when it's in range and you're still flying around.");
             Check("Riding: wait until you stop moving", () => Config.RideDismountWhenStill, v => Config.RideDismountWhenStill = v,

@@ -16,7 +16,7 @@ internal sealed class Link : IDisposable
     private readonly ICallGateProvider<float> _stopRange;
     private readonly ICallGateProvider<object> _dismountedForCombat;
     private readonly ICallGateSubscriber<object> _tripStarted, _tripEnded;
-    private readonly ICallGateSubscriber<bool> _isTrip, _willMount;
+    private readonly ICallGateSubscriber<bool> _isTrip, _willMount, _tripStops;
     private readonly ICallGateSubscriber<Dictionary<string, float>> _speeds;
 
     /// <summary>A Beeline trip is running (from its start/end events).</summary>
@@ -46,6 +46,7 @@ internal sealed class Link : IDisposable
         _tripEnded   = pi.GetIpcSubscriber<object>("Beeline.TripEnded");
         _isTrip      = pi.GetIpcSubscriber<bool>("Beeline.IsTripActive");
         _willMount   = pi.GetIpcSubscriber<bool>("Beeline.WillMount");
+        _tripStops   = pi.GetIpcSubscriber<bool>("Beeline.StopsTripForEnemies");
         _speeds      = pi.GetIpcSubscriber<Dictionary<string, float>>("Beeline.GetLearnedSpeeds");
         _tripStarted.Subscribe(OnTripStarted);
         _tripEnded.Subscribe(OnTripEnded);
@@ -65,6 +66,21 @@ internal sealed class Link : IDisposable
     }
 
     /// <summary>During a trip: will Beeline mount on this leg? (Asked only when about to use Sprint/Peloton.)</summary>
+    /// <summary>
+    /// During a Beeline trip: does its "Stop the trip when you target an enemy" option let a targeted enemy end the
+    /// trip? Off: Giddy Up leaves you on the mount for the trip (you break it by moving yourself). Asked when a trip
+    /// starts and when you target something, never per frame.
+    /// </summary>
+    internal bool TripStopsForEnemies { get; private set; } = true;
+
+    internal void RefreshTripOptions()
+    {
+        if (!TripActive)
+            return;
+        try { TripStopsForEnemies = _tripStops.InvokeFunc(); }
+        catch { TripStopsForEnemies = true; } // an older Beeline without the question: as before
+    }
+
     internal bool BeelineWillMount()
     {
         if (!TripActive)
@@ -83,6 +99,7 @@ internal sealed class Link : IDisposable
     private void OnTripStarted()
     {
         TripActive = true;
+        RefreshTripOptions();
         _p.OnFoot.OnTripStarted();
         Plugin.Info("Beeline trip started: Beeline decides mounting, Giddy Up handles Sprint/Peloton on foot");
     }

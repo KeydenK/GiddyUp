@@ -52,7 +52,7 @@ internal sealed unsafe class Mounted : IDisposable
     private Configuration Config => _p.Config;
 
     // For the settings header (formatted there, only while the window is open).
-    internal enum State { None, Approaching, NoSight, WaitingStill }
+    internal enum State { None, Approaching, NoSight, WaitingStill, OnTrip }
     internal State Now { get; private set; }
     internal float Gap { get; private set; }
     internal float DismountAt { get; private set; }
@@ -181,6 +181,14 @@ internal sealed unsafe class Mounted : IDisposable
             return;
         var flying = Plugin.Condition[ConditionFlag.InFlight];
 
+        // On a Beeline trip whose "stop the trip when you target an enemy" is off: the trip goes on, and you stay on the
+        // mount. Move yourself to break the trip (or turn the option on); from then on, the usual dismount.
+        if (_p.Link.TripActive && !_p.Link.TripStopsForEnemies)
+        {
+            Now = State.OnTrip;
+            return;
+        }
+
         if (Config.EnemyMode == EnemyDismount.WhenTargeted)
         {
             if (!WaitStill(player, now, flying))
@@ -288,6 +296,7 @@ internal sealed unsafe class Mounted : IDisposable
             || !ActionManager.CanUseActionOnTarget(7, target) || target->IsDead())
             return;
         _p.Range.Recheck(); // picks again from the cached list: newly unlocked actions count
+        _p.Link.RefreshTripOptions();
         _enemy = target;
         _presses = 0;
         _toldStill = false;

@@ -68,6 +68,19 @@ internal sealed unsafe class AttackRange
     /// Picks again from the cached candidates (a dozen or so; microseconds), e.g. when you target an enemy: an action
     /// unlocked by a quest without a level-up counts right away. The game-data scan itself is never redone.
     /// </summary>
+    /// <summary>
+    /// Like <see cref="Ensure"/>, and if the game-data scan is still running, picks the result up the moment it's done
+    /// (on the game thread), so the range is known without waiting for a target or a step on foot.
+    /// </summary>
+    internal void EnsureWhenReady()
+    {
+        Ensure();
+        var player = Game.Player;
+        if (_final || player == null)
+            return;
+        Candidates(player->ClassJob).ContinueWith(_ => Plugin.Framework.RunOnFrameworkThread(Ensure), TaskScheduler.Default);
+    }
+
     /// <summary>The range for your current job and level is known (the background scan is done).</summary>
     internal bool Final => _final;
 

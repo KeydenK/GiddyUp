@@ -90,7 +90,7 @@ public sealed class Plugin : IDalamudPlugin
             {
                 LoggedIn = ClientState.IsLoggedIn;
                 if (LoggedIn)
-                    Range.Ensure(); // starts the game-data scan for your job now, so it's ready before you need it
+                    Range.EnsureWhenReady(); // scans your job's game data now and applies it when done, before you need it
                 Refresh();
             }
             catch (Exception e)

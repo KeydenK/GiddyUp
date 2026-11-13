@@ -300,12 +300,14 @@ internal sealed unsafe class OnFoot : IDisposable
                     Plugin.Info("Sprint didn't go through (another action at the same moment): again");
                 _waiting = false;
             }
-            else if (_waitMount && _mountReason != null && since >= TickMs / 1000f && since <= 2f
+            else if (_waitMount && _mountReason != null && since >= Math.Max(TickMs / 1000f, Config.ActionLagSeconds) && since <= 2f
                      && !Game.Busy() && !Game.IsMounted)
             {
-                // A summon that went through shows as a cast at once: nothing a tick later means the press was
-                // dropped (another action went off at the same moment, e.g. one used by another plugin). Press again
-                // right away; during that action's animation the game queues it, so it goes off the moment it can.
+                // A summon that went through shows as a cast shortly after: still nothing after your learned action
+                // delay means the press was dropped (another action went off at the same moment, e.g. one used by
+                // another plugin). Not sooner: right after a zone change the cast can take a moment to show, and a
+                // re-press then would only be a second request. A dropped one can't go off before that other
+                // action's animation ends anyway.
                 _mountCasts--;
                 if (_mountDrops++ == 0)
                     Plugin.Info($"The mount didn't start ({_mountReason}, another action at the same moment): again");

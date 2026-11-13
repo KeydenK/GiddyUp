@@ -49,6 +49,8 @@ public sealed class Configuration : Dalamud.Configuration.IPluginConfiguration
     public bool MeleeAtMeleeRange { get; set; }
     /// <summary>Flying with an enemy in range while you move: show a "hold still to land" notice on screen.</summary>
     public bool HoldStillNotice { get; set; } = true;
+    /// <summary>Flying: the game ignored the landing (Dismount pressed again, no descent): show "can't land here" on screen.</summary>
+    public bool CantLandNotice { get; set; } = true;
     /// <summary>Riding on the ground: dismount only once you stop moving.</summary>
     public bool RideDismountWhenStill { get; set; }
 

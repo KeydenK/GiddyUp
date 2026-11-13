@@ -33,6 +33,7 @@ internal sealed unsafe class Mounted : IDisposable
     private long _stillAt;
     private bool? _still;          // last stillness answer (null = not known yet)
     private bool _toldStill;         // "hold still to land" shown (or the Beeline trip stopped) for this enemy
+    private bool _toldCantLand;      // "can't land here" shown for this enemy
 
     // A dismount Giddy Up started (for an enemy or an action): when, from what height, and how it went.
     private long _dismountAt;        // first press (0 = none in progress)
@@ -402,6 +403,7 @@ internal sealed unsafe class Mounted : IDisposable
         _enemy = target;
         _presses = 0;
         _toldStill = false;
+        _toldCantLand = false;
         Plugin.Info($"Enemy targeted; attack range {_p.Range.Yalms:0} y ({_p.Range.ActionName})");
     }
 
@@ -426,6 +428,14 @@ internal sealed unsafe class Mounted : IDisposable
             RefreshHeight(now, force: true);
         if (!Game.Use(ActionType.GeneralAction, Game.Dismount))
             return;
+        // Pressed again in the air while you hold still: the last press didn't land you (the game ignored it).
+        if (flying && _dismountAt != 0 && _dismountInFlight && _touchdownAt == 0 && !_toldCantLand)
+        {
+            _toldCantLand = true;
+            Plugin.Info($"The game didn't land you ({(float.IsNaN(_height) ? "no floor found below" : $"{_height:0.0} y above the floor")}): pressing again");
+            if (Config.CantLandNotice)
+                Plugin.Toast.ShowNormal("Giddy Up: can't land here, move a little");
+        }
         _presses++;
         DismountedFor = (nint)_enemy;
         NoteDismount(now);
@@ -453,7 +463,10 @@ internal sealed unsafe class Mounted : IDisposable
         if (player == null)
             return float.NaN;
         var pos = player->Position;
-        if (!BGCollisionModule.RaycastMaterialFilter(pos, new Vector3(0, -1, 0), out var hit, 1000f))
+        // From a little above you: hovering right at the floor (or a hair inside it), a ray from your feet would
+        // start below the floor and find nothing.
+        var from = new Vector3(pos.X, pos.Y + 1f, pos.Z);
+        if (!BGCollisionModule.RaycastMaterialFilter(from, new Vector3(0, -1, 0), out var hit, 1001f))
             return float.NaN;
         return Math.Max(0f, pos.Y - hit.Point.Y);
     }

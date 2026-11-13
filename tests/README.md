@@ -27,7 +27,7 @@ or one file: `/ctk test C:\Users\lordd\Claude\work\GiddyUp\tests\04-action-dismo
 `GiddyUp.TestState` returns one line, `; `-separated:
 
 ```
-foot=watching; moving=0.0; mount=none; effectWait=0; ride=off; replay=0; hook=1; range=25 Heated Split Shot; run=6.0(12); sprint=7.8(3); peloton=7.2(2); lag=0.30(8); trip=0; on=sprint,peloton,mount:zone|combat|gather|craft|talk,actionDismount+replay,enemy:inRange
+foot=watching; moving=0.0; mount=none; effectWait=0; ride=off; replay=0; hook=1; range=25 Heated Split Shot; rangeReady=1; cantLand=0; run=6.0(12); sprint=7.8(3); peloton=7.2(2); lag=0.30(8); trip=0; on=sprint,peloton,mount:zone|combat|gather|craft|talk,actionDismount+replay,enemy:inRange
 ```
 
 | key | meaning |
@@ -40,6 +40,8 @@ foot=watching; moving=0.0; mount=none; effectWait=0; ride=off; replay=0; hook=1;
 | `replay` | 1 while an action waits to be used after a dismount |
 | `hook` | 1 if the action-use hook is in place (dismount on action works) |
 | `range` | attack range in yalms and the action it comes from |
+| `rangeReady` | 1 once the range for your job/level is known (the game-data scan runs in the background after loading or a job change; 0 meanwhile = the 3 y fallback) |
+| `cantLand` | 1 after the game ignored a flying landing and its re-press: the next Dismount waits until you've moved 1.5 y and hold still |
 | `run`/`sprint`/`peloton` | learned speed (y/s) and number of samples (0 = still the default) |
 | `lag` | learned action delay (s) and samples |
 | `trip` | 1 during a Beeline trip (Beeline then decides mounting) |

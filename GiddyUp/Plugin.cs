@@ -223,7 +223,7 @@ public sealed class Plugin : IDalamudPlugin
         return string.Create(ci,
             $"foot={(OnFoot.Watching ? "watching" : "off")}; moving={OnFoot.MovingFor:0.0}; mount={mount}; effectWait={(OnFoot.WaitingForEffect ? 1 : 0)}; "
           + $"ride={ride}; replay={(ActionDismount.ReplayPending ? 1 : 0)}; hook={(ActionDismount.HookWorks ? 1 : 0)}; "
-          + $"range={Range.Yalms:0} {Range.ActionName}; "
+          + $"range={Range.Yalms:0} {Range.ActionName}; rangeReady={(Range.Final ? 1 : 0)}; cantLand={(Mounted.CantLandWaiting ? 1 : 0)}; "
           + $"run={c.RunSpeed:0.0}({c.RunSamples}); sprint={c.SprintSpeed:0.0}({c.SprintSamples}); peloton={c.PelotonSpeed:0.0}({c.PelotonSamples}); "
           + $"lag={c.ActionLagSeconds:0.00}({c.ActionLagSamples}); trip={(Link.TripActive ? 1 : 0)}; on={on}");
     }

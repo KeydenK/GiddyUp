@@ -31,7 +31,7 @@ internal sealed unsafe class Mounted : IDisposable
     private bool _losBlocked;        // last line-of-sight check said no (kept until the next check)
     private Vector3 _stillPos;       // where you were at the last stillness check (flying)
     private long _stillAt;
-    private bool _still;
+    private bool? _still;          // last stillness answer (null = not known yet)
     private bool _toldStill;         // "hold still to land" shown (or the Beeline trip stopped) for this enemy
 
     // A dismount Giddy Up started (for an enemy or an action): when, from what height, and how it went.
@@ -292,7 +292,7 @@ internal sealed unsafe class Mounted : IDisposable
             }
             else if (Config.HoldStillNotice)
             {
-                Plugin.Toast.ShowNormal("Giddy Up: hold still to land");
+                Plugin.Toast.ShowNormal("Giddy Up: " + NoticeText);
                 _noticeAt = now;
             }
         }
@@ -314,14 +314,44 @@ internal sealed unsafe class Mounted : IDisposable
         _noticeAt = 0;
         if (!ours)
             return;
-        var addon = Plugin.GameGui.GetAddonByName("_WideText");
-        if (!addon.IsNull && addon.IsVisible)
+        var unit = FindNotice();
+        if (unit != null)
         {
-            ((FFXIVClientStructs.FFXIV.Component.GUI.AtkUnitBase*)addon.Address)->Hide(false, false, 0);
-            Plugin.Info("You hold still: notice taken off the screen");
+            unit->Hide(false, false, 0);
+            Plugin.Info($"You hold still: notice taken off the screen ({System.Text.Encoding.UTF8.GetString(unit->Name).TrimEnd('\0')})");
         }
         else
             Plugin.Info("You hold still: notice already gone");
+    }
+
+    private const string NoticeText = "hold still to land";
+
+    /// <summary>
+    /// The game window currently showing our notice: the visible one with a text containing it. Looked up only when
+    /// taking the notice off (once per notice), so which window the game uses for it doesn't matter.
+    /// </summary>
+    private static FFXIVClientStructs.FFXIV.Component.GUI.AtkUnitBase* FindNotice()
+    {
+        var stage = FFXIVClientStructs.FFXIV.Component.GUI.AtkStage.Instance();
+        if (stage == null || stage->RaptureAtkUnitManager == null)
+            return null;
+        ref var list = ref stage->RaptureAtkUnitManager->AtkUnitManager.AllLoadedUnitsList;
+        var entries = list.Entries;
+        for (var i = 0; i < list.Count && i < entries.Length; i++)
+        {
+            var unit = entries[i].Value;
+            if (unit == null || !unit->IsVisible)
+                continue;
+            for (var n = 0; n < unit->UldManager.NodeListCount; n++)
+            {
+                var node = unit->UldManager.NodeList[n];
+                if (node == null || node->Type != FFXIVClientStructs.FFXIV.Component.GUI.NodeType.Text)
+                    continue;
+                if (((FFXIVClientStructs.FFXIV.Component.GUI.AtkTextNode*)node)->NodeText.ToString().Contains(NoticeText))
+                    return unit;
+            }
+        }
+        return null;
     }
 
     /// <summary>
@@ -335,15 +365,16 @@ internal sealed unsafe class Mounted : IDisposable
         if (_stillAt != 0 && since < 250)
             return _still;
         var pos = player->Position;
-        var fresh = _stillAt != 0 && since < 1000;
-        if (fresh)
+        if (_stillAt != 0 && since < 1000)
         {
             var moved = Vector2.Distance(new Vector2(pos.X, pos.Z), new Vector2(_stillPos.X, _stillPos.Z));
             _still = moved / (since / 1000f) < Config.RunSpeed * 0.25f;
         }
+        else
+            _still = null; // an old sample says nothing about now (and must not be reused for the next 0.25 s)
         _stillPos = pos;
         _stillAt = now;
-        return fresh ? _still : null;
+        return _still;
     }
 
     private void OnTargetChanged(GameObject* target)
@@ -355,6 +386,8 @@ internal sealed unsafe class Mounted : IDisposable
         _losCheckedAt = 0;
         _losBlocked = false;
         _lastFrameAt = Environment.TickCount64;
+        _stillAt = 0;
+        _still = null;
         if (target == null)
             return;
         // An enemy = something you could auto-attack (action 7), as the game itself decides.

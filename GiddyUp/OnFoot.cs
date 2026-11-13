@@ -273,6 +273,14 @@ internal sealed unsafe class OnFoot : IDisposable
                 _p.Speeds.LearnActionLag(since);
                 _waiting = false;
             }
+            else if (_waitSprint && since > Config.ActionLagSeconds * 2f + TickMs / 1000f
+                     && Game.Ready(ActionType.GeneralAction, Game.Sprint))
+            {
+                // Sprint still ready: the press was dropped (another action went off at the same moment, e.g. one
+                // used by another plugin). Try again now rather than after the full wait.
+                Plugin.Info("Sprint didn't go through (another action at the same moment): again");
+                _waiting = false;
+            }
             else if (since > 2f)
                 _waiting = false;
             else
@@ -322,6 +330,7 @@ internal sealed unsafe class OnFoot : IDisposable
         {
             Plugin.Info($"Sprint ({Config.SprintSpeed:0.0} y/s beats {current:0.0})");
             Wait(Game.SprintStatus, now);
+            _waitSprint = true;
             return;
         }
 
@@ -376,8 +385,11 @@ internal sealed unsafe class OnFoot : IDisposable
                && !t->IsDead() && ActionManager.CanUseActionOnTarget(7, t);
     }
 
+    private bool _waitSprint; // the wait is for a Sprint press (a dropped one shows: Sprint stays ready)
+
     private void Wait(uint status, long now)
     {
+        _waitSprint = false;
         _waiting = true;
         _waitStatus = status;
         _waitSince = now;

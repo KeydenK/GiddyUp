@@ -42,6 +42,7 @@ internal sealed unsafe class ActionDismount : IDisposable
     internal long LastActionAt { get; private set; }
 
     private long _pelotonHeldLogAt;
+    private string? _pelotonHeldWhy;
 
     public ActionDismount(Plugin p)
     {
@@ -70,19 +71,28 @@ internal sealed unsafe class ActionDismount : IDisposable
         if (type is ActionType.Action or ActionType.Item && !Game.OwnCall && !_replaying
             && !(type == ActionType.Action && id == Game.PelotonAction))
             LastActionAt = Environment.TickCount64;
-        // Peloton from elsewhere (another plugin, or you) while a mount is on its way and you're on foot: held back.
-        // Its animation would only push the summon back (about a second), and mounting ends it anyway.
+        // Peloton from elsewhere (another plugin, or you), on foot, when it can only cost time: held back.
+        // - A mount is on its way (after a fight, a teleport, a Beeline leg that mounts...): its animation would push
+        //   the summon back by about a second, and mounting ends it anyway.
+        // - An enemy is targeted within your attack range, out of combat (e.g. Giddy Up just got you off the mount
+        //   for it): you're about to attack, and its animation would only delay your first hit.
         if (type == ActionType.Action && id == Game.PelotonAction && !Game.OwnCall
-            && !Plugin.Condition[ConditionFlag.Mounted] && !Plugin.Condition[ConditionFlag.RidingPillion]
-            && _p.OnFoot.MountComing)
+            && !Plugin.Condition[ConditionFlag.Mounted] && !Plugin.Condition[ConditionFlag.RidingPillion])
         {
-            var at = Environment.TickCount64;
-            if (at - _pelotonHeldLogAt > 10_000)
+            var why = _p.OnFoot.MountComing ? "a mount is on its way (mounting would end it)"
+                    : !Plugin.Condition[ConditionFlag.InCombat] && _p.OnFoot.AboutToFight() ? "you're about to fight (enemy in range)"
+                    : null;
+            if (why != null)
             {
-                _pelotonHeldLogAt = at;
-                Plugin.Info("Peloton held back: a mount is on its way (mounting would end it)");
+                var at = Environment.TickCount64;
+                if (at - _pelotonHeldLogAt > 10_000 || why != _pelotonHeldWhy)
+                {
+                    _pelotonHeldLogAt = at;
+                    _pelotonHeldWhy = why;
+                    Plugin.Info($"Peloton held back: {why}");
+                }
+                return false;
             }
-            return false;
         }
         try
         {

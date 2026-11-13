@@ -407,6 +407,24 @@ internal sealed unsafe class OnFoot : IDisposable
     }
 
     /// <summary>Your target is something you could attack (as the game decides: auto-attack would work on it).</summary>
+    /// <summary>
+    /// You're about to fight: an enemy you could attack is targeted and already within your attack range (e.g. right
+    /// after Giddy Up got you off the mount for it). Farther away, a speed buff still helps you get there.
+    /// </summary>
+    internal bool AboutToFight()
+    {
+        if (!EnemyTargeted())
+            return false;
+        var t = TargetSystem.Instance()->Target;
+        var me = Game.Player;
+        if (me == null)
+            return false;
+        _p.Range.Ensure();
+        var gap = Vector2.Distance(new Vector2(me->Position.X, me->Position.Z), new Vector2(t->Position.X, t->Position.Z))
+                  - me->HitboxRadius - t->HitboxRadius;
+        return gap <= _p.Range.Yalms;
+    }
+
     private static bool EnemyTargeted()
     {
         var t = TargetSystem.Instance()->Target;

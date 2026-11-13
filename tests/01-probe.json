@@ -3,7 +3,7 @@
   "strict": false,
   "steps": [
     { "waitFor": "probe:GiddyUp:foot=", "timeout": 3000, "msg": "GiddyUp.TestState should answer (dev build loaded?)" },
-    { "assert": "probe:GiddyUp:^foot=(watching|off); moving=[\\d.]+; mount=.+; effectWait=[01]; ride=.+; replay=[01]; hook=1; range=\\d+ .+; run=[\\d.]+\\(\\d+\\); sprint=[\\d.]+\\(\\d+\\); peloton=[\\d.]+\\(\\d+\\); lag=[\\d.]+\\(\\d+\\); trip=[01]; on=", "msg": "the state line should have every field, and the action hook should be in place" },
+    { "assert": "probe:GiddyUp:^foot=(watching|off); moving=[\\d.]+; mount=.+; effectWait=[01]; ride=.+; replay=[01]; hook=1; range=\\d+ .+; rangeReady=1; cantLand=[01]; run=[\\d.]+\\(\\d+\\); sprint=[\\d.]+\\(\\d+\\); peloton=[\\d.]+\\(\\d+\\); lag=[\\d.]+\\(\\d+\\); trip=[01]; on=", "msg": "the state line should have every field, and the action hook should be in place" },
     { "assert": "!probe:GiddyUp:^error", "msg": "the probe should not throw" }
   ]
 }

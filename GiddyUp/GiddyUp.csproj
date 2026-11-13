@@ -1,7 +1,7 @@
 <Project Sdk="Dalamud.NET.Sdk/15.0.0">
     <PropertyGroup>
-        <Version>0.1.0.0</Version>
-        <Description>Mounting, dismounting and Sprint done for you, at the right moment.</Description>
+        <Version>1.0.0.0</Version>
+        <Description>Mounting, dismounting, Sprint and Peloton done for you, at the right moment.</Description>
         <Authors>KeydenK</Authors>
         <PackageProjectUrl>https://github.com/KeydenK/GiddyUp</PackageProjectUrl>
         <PackageLicenseExpression>MIT</PackageLicenseExpression>

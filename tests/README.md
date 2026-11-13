@@ -6,11 +6,11 @@ Giddy Up (the `GiddyUp.TestState` probe only answers in dev builds) and default 
 Run the whole suite (files run in name order; 02 and 03 depend on that order):
 
 ```
-/ctk test C:\Users\lordd\Claude\work\GiddyUp\tests
+/ctk test <your work folder>/GiddyUp/tests
 /ctk test report
 ```
 
-or one file: `/ctk test C:\Users\lordd\Claude\work\GiddyUp\tests\04-action-dismount.json`.
+or one file: `/ctk test <your work folder>/GiddyUp/tests/04-action-dismount.json` (forward slashes).
 
 ## Common preconditions
 

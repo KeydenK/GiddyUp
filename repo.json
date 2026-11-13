@@ -1,0 +1,40 @@
+[
+  {
+    "Author": "KeydenK",
+    "Name": "Giddy Up",
+    "InternalName": "GiddyUp",
+    "AssemblyVersion": "1.0.0.0",
+    "Punchline": "Mounting, dismounting, Sprint and Peloton done for you, at the right moment.",
+    "Description": "Giddy Up handles your mount and your running speed so you don't have to: it mounts you up after a zone change, a fight, gathering, crafting or a conversation (waiting until you're done: motifs, heals and buffs first); gets you off the mount when you use an action or when the enemy you target comes into your attack range (landing first if you're flying); uses Sprint when it helps and keeps Peloton up on jobs that have it. Everything is timed from your own measured speeds. Works great with Beeline. Command: /giddyup",
+    "ApplicableVersion": "any",
+    "RepoUrl": "https://github.com/KeydenK/GiddyUp",
+    "Tags": [
+      "Mount",
+      "Dismount",
+      "Sprint",
+      "Peloton",
+      "Movement",
+      "Auto",
+      "Flying",
+      "QoL"
+    ],
+    "CategoryTags": [
+      "utility"
+    ],
+    "DalamudApiLevel": 15,
+    "LoadRequiredState": 0,
+    "LoadSync": false,
+    "CanUnloadAsync": false,
+    "LoadPriority": 0,
+    "Changelog": "First release.",
+    "AcceptsFeedback": true,
+    "IsHide": false,
+    "IsTestingExclusive": false,
+    "DownloadCount": 0,
+    "LastUpdate": 0,
+    "DownloadLinkInstall": "https://github.com/KeydenK/GiddyUp/releases/latest/download/latest.zip",
+    "DownloadLinkUpdate": "https://github.com/KeydenK/GiddyUp/releases/latest/download/latest.zip",
+    "DownloadLinkTesting": "https://github.com/KeydenK/GiddyUp/releases/latest/download/latest.zip",
+    "IconUrl": "https://raw.githubusercontent.com/KeydenK/GiddyUp/main/GiddyUp/images/icon.png"
+  }
+]

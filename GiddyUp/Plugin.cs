@@ -86,6 +86,8 @@ public sealed class Plugin : IDalamudPlugin
             try
             {
                 LoggedIn = ClientState.IsLoggedIn;
+                if (LoggedIn)
+                    Range.Ensure(); // starts the game-data scan for your job now, so it's ready before you need it
                 Refresh();
             }
             catch (Exception e)

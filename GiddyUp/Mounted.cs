@@ -207,6 +207,12 @@ internal sealed unsafe class Mounted : IDisposable
         var player = Game.Player;
         if (player == null)
             return;
+        // The range from game data is scanned in the background (right after loading, or a new job): picked up the
+        // moment it's ready. Once known, this is a job/level compare.
+        var known = _p.Range.Final;
+        _p.Range.Ensure();
+        if (!known && _p.Range.Final)
+            Plugin.Info($"Attack range ready: {_p.Range.Yalms:0} y ({_p.Range.ActionName})");
         var flying = Plugin.Condition[ConditionFlag.InFlight];
 
         // On a Beeline trip whose "stop the trip when you target an enemy" is off: the trip goes on, and you stay on the

@@ -26,7 +26,7 @@ internal sealed unsafe class OnFoot : IDisposable
     // attempts so far (summons the game accepted, and refusals, which are retried sooner).
     private string? _mountReason;
     private MountTiming _mountTiming;
-    private int _mountCasts, _mountRefusals;
+    private int _mountCasts, _mountRefusals, _mountDrops;
     private bool _lastTryAccepted;
     private long _mountTriedAt;
     private long _mountWantedAt;
@@ -176,7 +176,7 @@ internal sealed unsafe class OnFoot : IDisposable
             return;
         _mountReason = reason;
         _mountTiming = timing;
-        _mountCasts = _mountRefusals = 0;
+        _mountCasts = _mountRefusals = _mountDrops = 0;
         _mountTriedAt = 0;
         _mountWantedAt = Environment.TickCount64;
         _targetAtWant = (nint)TargetSystem.Instance()->Target;
@@ -285,6 +285,17 @@ internal sealed unsafe class OnFoot : IDisposable
                 // again right away; during that action's animation the game queues it, so it goes off the moment it can.
                 if (_sprintRetries++ == 0)
                     Plugin.Info("Sprint didn't go through (another action at the same moment): again");
+                _waiting = false;
+            }
+            else if (_waitMount && since >= TickMs / 1000f && !Game.Busy() && !Game.IsMounted)
+            {
+                // A summon that went through shows as a cast at once: nothing a tick later means the press was
+                // dropped (another action went off at the same moment, e.g. one used by another plugin). Press again
+                // right away; during that action's animation the game queues it, so it goes off the moment it can.
+                _mountCasts--;
+                if (_mountDrops++ == 0)
+                    Plugin.Info($"The mount didn't start ({_mountReason}, another action at the same moment): again");
+                _mountTriedAt = 0;
                 _waiting = false;
             }
             else if (since > 2f)
@@ -397,9 +408,12 @@ internal sealed unsafe class OnFoot : IDisposable
     private bool _waitSprint; // the wait is for a Sprint press (a dropped one shows: Sprint stays ready)
     private int _sprintRetries; // re-presses of a dropped Sprint, until one goes through
 
+    private bool _waitMount; // the wait is for a summon (a dropped one shows: no cast starts)
+
     private void Wait(uint status, long now)
     {
         _waitSprint = false;
+        _waitMount = false;
         _waiting = true;
         _waitStatus = status;
         _waitSince = now;
@@ -412,9 +426,9 @@ internal sealed unsafe class OnFoot : IDisposable
         // half a second later, up to 10 times.
         if (_mountTriedAt != 0 && now - _mountTriedAt < (_lastTryAccepted ? 3000 : 500))
             return;
-        if (_mountCasts >= 3 || _mountRefusals >= 10)
+        if (_mountCasts >= 3 || _mountRefusals >= 10 || _mountDrops >= 30)
         {
-            Plugin.Info($"Gave up mounting ({_mountReason}): {_mountCasts} summons, {_mountRefusals} refusals");
+            Plugin.Info($"Gave up mounting ({_mountReason}): {_mountCasts} summons, {_mountRefusals} refusals, {_mountDrops} dropped");
             _mountReason = null;
             _p.Refresh();
             return;
@@ -432,8 +446,10 @@ internal sealed unsafe class OnFoot : IDisposable
         if (ok)
         {
             _mountCasts++;
-            Plugin.Info($"Mounting ({_mountReason}, {(now - _mountWantedAt) / 1000f:0.0} s after)");
+            if (_mountDrops == 0)
+                Plugin.Info($"Mounting ({_mountReason}, {(now - _mountWantedAt) / 1000f:0.0} s after)");
             Wait(0, now);
+            _waitMount = true;
         }
         else if (_mountRefusals++ == 0)
             Plugin.Info($"Mount not possible yet ({_mountReason}): retrying");

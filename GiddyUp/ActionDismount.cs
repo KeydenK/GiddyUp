@@ -269,7 +269,7 @@ internal sealed unsafe class ActionDismount : IDisposable
     {
         var now = Environment.TickCount64;
         var c = Plugin.Condition;
-        var stillOn = c[ConditionFlag.Mounted] || c[ConditionFlag.Jumping61] || c[ConditionFlag.MountOrOrnamentTransition];
+        var stillOn = c[ConditionFlag.Mounted] || c[ConditionFlag.Jumping] || c[ConditionFlag.Jumping61] || c[ConditionFlag.MountOrOrnamentTransition];
         if (stillOn)
         {
             _offAt = 0;

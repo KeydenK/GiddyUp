@@ -30,7 +30,7 @@ internal static unsafe class Game
     {
         var c = Plugin.Condition;
         return c[ConditionFlag.Casting] || c[ConditionFlag.Casting87] || MountComing
-            || c[ConditionFlag.BetweenAreas] || c[ConditionFlag.BetweenAreas51] || c[ConditionFlag.Jumping61]
+            || c[ConditionFlag.BetweenAreas] || c[ConditionFlag.BetweenAreas51] || c[ConditionFlag.Jumping] || c[ConditionFlag.Jumping61]
             || c[ConditionFlag.OccupiedInEvent] || c[ConditionFlag.OccupiedInQuestEvent] || c[ConditionFlag.OccupiedInCutSceneEvent]
             || c[ConditionFlag.OccupiedSummoningBell] || c[ConditionFlag.Occupied] || c[ConditionFlag.Occupied30]
             || c[ConditionFlag.Occupied33] || c[ConditionFlag.Occupied38] || c[ConditionFlag.Occupied39]

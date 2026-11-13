@@ -34,6 +34,8 @@ internal sealed unsafe class Mounted : IDisposable
     private bool? _still;          // last stillness answer (null = not known yet)
     private bool _toldStill;         // "hold still to land" shown (or the Beeline trip stopped) for this enemy
     private bool _toldCantLand;      // "can't land here" shown for this enemy
+    private Vector2 _refusedSpot;    // where the game last ignored a landing (flat)
+    private bool _refusedSpotSet;
 
     // A dismount Giddy Up started (for an enemy or an action): when, from what height, and how it went.
     private long _dismountAt;        // first press (0 = none in progress)
@@ -426,6 +428,7 @@ internal sealed unsafe class Mounted : IDisposable
         _presses = 0;
         _toldStill = false;
         _toldCantLand = false;
+        _refusedSpotSet = false;
         Plugin.Info($"Enemy targeted; attack range {_p.Range.Yalms:0} y ({_p.Range.ActionName})");
     }
 
@@ -446,15 +449,28 @@ internal sealed unsafe class Mounted : IDisposable
             if (now - _lastPressAt < expected + 1000)
                 return; // still landing
         }
+        // The last press in the air didn't land you (the game ignored it: a spot it won't land on). Pressing again on
+        // the same spot does nothing: once that's been seen, the next press waits until you've moved a little (and
+        // hold still again, see WaitStill).
+        var refused = flying && _dismountAt != 0 && _dismountInFlight && _touchdownAt == 0;
+        var me = Game.Player;
+        if (refused && _refusedSpotSet && me != null
+            && Vector2.Distance(new Vector2(me->Position.X, me->Position.Z), _refusedSpot) < 1.5f)
+            return;
         if (flying)
             RefreshHeight(now, force: true);
         if (!Game.Use(ActionType.GeneralAction, Game.Dismount))
             return;
+        if (refused && me != null)
+        {
+            _refusedSpot = new Vector2(me->Position.X, me->Position.Z);
+            _refusedSpotSet = true;
+        }
         // Pressed again in the air while you hold still: the last press didn't land you (the game ignored it).
-        if (flying && _dismountAt != 0 && _dismountInFlight && _touchdownAt == 0 && !_toldCantLand)
+        if (refused && !_toldCantLand)
         {
             _toldCantLand = true;
-            Plugin.Info($"The game didn't land you ({(float.IsNaN(_height) ? "no floor found below" : $"{_height:0.0} y above the floor")}): pressing again");
+            Plugin.Info($"The game didn't land you ({(float.IsNaN(_height) ? "no floor found below" : $"{_height:0.0} y above the floor")}): pressing again, then only once you've moved a little");
             if (Config.CantLandNotice)
             {
                 Plugin.Toast.ShowNormal("Giddy Up: " + CantLandText);

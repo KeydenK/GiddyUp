@@ -207,7 +207,7 @@ internal sealed unsafe class ConfigWindow : Window
             Check("Tell me when the game won't land me", () => Config.CantLandNotice, v => Config.CantLandNotice = v,
                   "Shows \"can't land here, move a little\" when Giddy Up pressed Dismount while you held still and the game "
                 + "didn't land you (some spots can't be landed on, or you're hovering right at the ground). Moving a "
-                + "little usually fixes it; Giddy Up keeps trying for a few more seconds.");
+                + "little usually fixes it: Giddy Up tries again once you've moved and hold still.");
             Check("Riding: wait until you stop moving", () => Config.RideDismountWhenStill, v => Config.RideDismountWhenStill = v,
                   "On the ground, Giddy Up dismounts only once you hold still (it doesn't forget meanwhile). Off: as "
                 + "soon as the enemy is in range, even while you move.");

@@ -57,6 +57,9 @@ internal sealed unsafe class Mounted : IDisposable
     internal float Gap { get; private set; }
     internal float DismountAt { get; private set; }
 
+    /// <summary>The enemy Giddy Up last got you off the mount for (0 = none): what you're about to fight.</summary>
+    internal nint DismountedFor { get; set; } // cleared when a fight starts or you change zone (object slots get reused)
+
     public void Dispose() => Stop();
 
     internal void Refresh()
@@ -424,6 +427,7 @@ internal sealed unsafe class Mounted : IDisposable
         if (!Game.Use(ActionType.GeneralAction, Game.Dismount))
             return;
         _presses++;
+        DismountedFor = (nint)_enemy;
         NoteDismount(now);
         if (range <= 0) Plugin.Info("Dismount: you targeted an enemy");
         else Plugin.Info($"Dismount: enemy within {range:0} y{(lead > 0.5f ? $" (+{lead:0} y to land)" : "")}");

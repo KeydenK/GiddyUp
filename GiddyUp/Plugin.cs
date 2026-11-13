@@ -149,6 +149,8 @@ public sealed class Plugin : IDalamudPlugin
 
     private void OnConditionChange(Dalamud.Game.ClientState.Conditions.ConditionFlag flag, bool value)
     {
+        if (flag == Dalamud.Game.ClientState.Conditions.ConditionFlag.InCombat && value)
+            Mounted.DismountedFor = 0;
         OnFoot.OnCondition(flag, value);
         Mounted.OnCondition(flag, value);
         ActionDismount.OnCondition(flag, value);
@@ -158,6 +160,7 @@ public sealed class Plugin : IDalamudPlugin
 
     private void OnTerritoryChanged(uint territory)
     {
+        Mounted.DismountedFor = 0;
         OnFoot.OnTerritory(territory);
         Refresh();
     }

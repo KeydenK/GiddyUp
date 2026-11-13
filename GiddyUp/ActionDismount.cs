@@ -74,8 +74,8 @@ internal sealed unsafe class ActionDismount : IDisposable
         // Peloton from elsewhere (another plugin, or you), on foot, when it can only cost time: held back.
         // - A mount is on its way (after a fight, a teleport, a Beeline leg that mounts...): its animation would push
         //   the summon back by about a second, and mounting ends it anyway.
-        // - An enemy is targeted within your attack range, out of combat (e.g. Giddy Up just got you off the mount
-        //   for it): you're about to attack, and its animation would only delay your first hit.
+        // - Out of combat, the enemy Giddy Up just got you off the mount for is targeted and within your attack range:
+        //   you're about to attack, and its animation would only delay your first hit.
         if (type == ActionType.Action && id == Game.PelotonAction && !Game.OwnCall
             && !Plugin.Condition[ConditionFlag.Mounted] && !Plugin.Condition[ConditionFlag.RidingPillion])
         {

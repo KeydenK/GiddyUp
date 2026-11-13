@@ -408,14 +408,17 @@ internal sealed unsafe class OnFoot : IDisposable
 
     /// <summary>Your target is something you could attack (as the game decides: auto-attack would work on it).</summary>
     /// <summary>
-    /// You're about to fight: an enemy you could attack is targeted and already within your attack range (e.g. right
-    /// after Giddy Up got you off the mount for it). Farther away, a speed buff still helps you get there.
+    /// You're about to fight: Giddy Up just got you off the mount for the enemy you're targeting, and it's within your
+    /// attack range. Only that case (never in duties, where you can't be mounted; any other target, e.g. the next pack
+    /// in a dungeon, isn't affected). Farther away, a speed buff still helps you get there.
     /// </summary>
     internal bool AboutToFight()
     {
         if (!EnemyTargeted())
             return false;
         var t = TargetSystem.Instance()->Target;
+        if ((nint)t != _p.Mounted.DismountedFor)
+            return false;
         var me = Game.Player;
         if (me == null)
             return false;

@@ -59,6 +59,7 @@ internal sealed unsafe class Mounted : IDisposable
     internal State Now { get; private set; }
     internal float Gap { get; private set; }
     internal float DismountAt { get; private set; }
+    internal bool Watching => _watching;
 
     /// <summary>The enemy Giddy Up last got you off the mount for (0 = none): what you're about to fight.</summary>
     internal nint DismountedFor { get; set; } // cleared when a fight starts or you change zone (object slots get reused)

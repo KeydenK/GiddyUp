@@ -1,0 +1,16 @@
+{
+  "name": "Giddy Up: walking with Sprint on cooldown uses Peloton (Machinist or another Peloton job; run right after 02; ~60 y open ground ahead)",
+  "strict": false,
+  "steps": [
+    { "waitFor": "!mounted && !cond:InCombat", "timeout": 2000, "msg": "start on foot, out of combat" },
+    { "mark": "standing still until Sprint wears off (its cooldown keeps running)" },
+    { "waitFor": "!status:50 && !status:1199", "timeout": 35000, "msg": "Sprint/Peloton from the last test should wear off" },
+    { "waitFor": "probe:GiddyUp:foot=watching && probe:GiddyUp:; on=[^;]*peloton", "timeout": 3000, "msg": "the on-foot watcher should run with Keep Peloton on" },
+    { "mark": "walking forward 6 s" },
+    { "do": "stick L 0 1 6000" },
+    { "waitFor": "status:1199 && event:\\[GiddyUp\\] Peloton(?! held| renewed)", "timeout": 4000, "msg": "Giddy Up should use Peloton (Sprint is on cooldown)" },
+    { "wait": 5000 },
+    { "assert": "!event:\\[GiddyUp\\] Sprint \\(", "msg": "Sprint is on cooldown: Giddy Up should not have used it" },
+    { "assert": "!anomaly:ACTION TWICE|WOBBLE", "msg": "Peloton used once, walking clean" }
+  ]
+}

@@ -1,0 +1,17 @@
+{
+  "name": "Giddy Up: walking on foot uses Sprint (on foot, out of combat, Sprint ready, ~60 y open ground ahead)",
+  "strict": false,
+  "steps": [
+    { "waitFor": "!mounted && !cond:InCombat", "timeout": 2000, "msg": "start on foot, out of combat" },
+    { "waitFor": "!status:50 && !status:1199", "timeout": 35000, "msg": "no Sprint/Peloton left over from earlier" },
+    { "waitFor": "probe:GiddyUp:foot=watching && probe:GiddyUp:; on=[^;]*sprint", "timeout": 3000, "msg": "the on-foot watcher should run with Auto Sprint on" },
+    { "mark": "walking forward 6 s" },
+    { "do": "stick L 0 1 6000" },
+    { "waitFor": "status:50 && event:\\[GiddyUp\\] Sprint \\(", "timeout": 4000, "msg": "Giddy Up should use Sprint once you've been moving a moment" },
+    { "wait": 5000 },
+    { "waitFor": "probe:GiddyUp:effectWait=0", "timeout": 3000, "msg": "no wait for an effect should be left hanging" },
+    { "assert": "!event:\\[GiddyUp\\] Peloton(?! held)", "msg": "no Peloton on top of a fresh Sprint (Sprint is faster)" },
+    { "assert": "!event:\\[GiddyUp\\] Sprint didn't go through", "msg": "the Sprint press should go through the first time (no other action at the same moment)" },
+    { "assert": "!anomaly:ACTION TWICE|WOBBLE", "msg": "Sprint used once, walking clean" }
+  ]
+}

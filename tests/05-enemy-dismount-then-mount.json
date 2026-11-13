@@ -1,0 +1,26 @@
+{
+  "name": "Giddy Up: target an enemy while riding -> off the mount in range; after the fight -> mounted again (on foot to start, one enemy within ~20 y in view, nothing else hostile nearby, the fight handled as usual)",
+  "strict": false,
+  "steps": [
+    { "waitFor": "!mounted && !cond:InCombat", "timeout": 2000, "msg": "start on foot, out of combat" },
+    { "waitFor": "probe:GiddyUp:; on=[^;]*enemy:inRange && probe:GiddyUp:; on=[^;]*mount:[a-z|]*combat", "timeout": 3000, "msg": "enemy dismount (in range) and mount after combat should be on" },
+    { "cmd": "/mount \"SDS Fenrir\"" },
+    { "waitFor": "mounted", "timeout": 8000, "msg": "the mount should be summoned" },
+    { "waitFor": "probe:GiddyUp:ride=None", "timeout": 3000, "msg": "the enemy watcher should run while riding" },
+    { "wait": 1000 },
+    { "mark": "targeting the nearest enemy" },
+    { "cmd": "/targetenemy" },
+    { "waitFor": "event:\\[GiddyUp\\] Enemy targeted; attack range", "timeout": 3000, "msg": "Giddy Up should see the enemy target" },
+    { "waitFor": "event:\\[GiddyUp\\] Dismount: enemy within", "timeout": 10000, "msg": "the enemy should be within attack range and Giddy Up should dismount (if not: the probe's ride=Approaching gap/range shows how far it is)" },
+    { "waitFor": "!mounted", "timeout": 6000, "msg": "you should be off the mount" },
+    { "mark": "fight" },
+    { "waitFor": "cond:InCombat", "timeout": 20000, "msg": "the fight should start" },
+    { "waitFor": "!cond:InCombat", "timeout": 120000, "msg": "the fight should end" },
+    { "wait": 500 },
+    { "assert": "event:\\[GiddyUp\\] Will mount \\(after combat\\)", "msg": "Giddy Up should want to mount after the fight" },
+    { "waitFor": "mounted", "timeout": 15000, "msg": "the mount should come once you're done (about one GCD after your last action)" },
+    { "assert": "event:\\[GiddyUp\\] Mounting \\(after combat", "msg": "the mount should be Giddy Up's" },
+    { "assert": "!event:\\[GiddyUp\\] (Not mounting|Gave up mounting)", "msg": "no cancelled or abandoned mount" },
+    { "assert": "!anomaly:ACTION TWICE", "msg": "no action used twice" }
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "name": "Giddy Up: using an action on the mount gets you off, then the action goes off (Machinist, on foot to start, Reassemble ready, mount SDS Fenrir)",
+  "strict": false,
+  "steps": [
+    { "waitFor": "!mounted && !cond:InCombat", "timeout": 2000, "msg": "start on foot, out of combat" },
+    { "waitFor": "probe:GiddyUp:hook=1 && probe:GiddyUp:; on=[^;]*actionDismount\\+replay", "timeout": 3000, "msg": "dismount on action (with the action afterwards) should be on and the hook in place" },
+    { "cmd": "/mount \"SDS Fenrir\"" },
+    { "waitFor": "mounted", "timeout": 8000, "msg": "the mount should be summoned" },
+    { "wait": 1500 },
+    { "mark": "using Reassemble while mounted" },
+    { "cmd": "/ac \"Reassemble\"" },
+    { "waitFor": "event:\\[GiddyUp\\] Dismount for Reassemble", "timeout": 3000, "msg": "Giddy Up should press Dismount instead of the action" },
+    { "waitFor": "!mounted", "timeout": 6000, "msg": "you should be off the mount" },
+    { "waitFor": "event:\\[GiddyUp\\] Reassemble used after dismounting", "timeout": 5000, "msg": "Reassemble should go off once you're on your feet" },
+    { "waitFor": "probe:GiddyUp:replay=0", "timeout": 2000, "msg": "nothing should stay queued" },
+    { "assert": "!event:\\[GiddyUp\\] (Gave up on|Reassemble refused)", "msg": "no give-up and no refusal" },
+    { "assert": "!anomaly:ACTION TWICE", "msg": "Dismount and Reassemble each used once" }
+  ]
+}

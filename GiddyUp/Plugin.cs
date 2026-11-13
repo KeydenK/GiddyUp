@@ -79,6 +79,7 @@ public sealed class Plugin : IDalamudPlugin
         ClientState.Logout           += OnLogout;
 
         Commands.AddHandler(Command, new CommandInfo(OnCommand) { HelpMessage = "Open the settings." });
+        TestProbe.Register(PluginInterface, "GiddyUp", TestState); // dev builds only
 
         // Plugin loaded while already in game.
         Framework.RunOnFrameworkThread(() =>
@@ -102,6 +103,7 @@ public sealed class Plugin : IDalamudPlugin
 
     public void Dispose()
     {
+        TestProbe.Unregister();
         Condition.ConditionChange    -= OnConditionChange;
         ClientState.TerritoryChanged -= OnTerritoryChanged;
         ClientState.ClassJobChanged  -= OnClassJobChanged;
@@ -192,4 +194,37 @@ public sealed class Plugin : IDalamudPlugin
     }
 
     private void OnCommand(string command, string args) => _configWindow.Toggle();
+
+    /// <summary>
+    /// For tests (dev builds only, see TestProbe): one line of what Giddy Up is doing right now. Only reads fields.
+    /// </summary>
+    private string TestState()
+    {
+        var ci = System.Globalization.CultureInfo.InvariantCulture;
+        var c = Config;
+        var mount = OnFoot.MountReason is { } why
+            ? $"{why} ({(OnFoot.PendingMountTiming == MountTiming.RightAway ? "right away" : "when moving")})"
+            : "none";
+        var ride = !Mounted.Watching ? "off"
+                 : Mounted.Now == Mounted.State.Approaching ? string.Create(ci, $"Approaching {Mounted.Gap:0.0}/{Mounted.DismountAt:0.0}")
+                 : Mounted.Now.ToString();
+        var mountOn = string.Join("|", new[]
+        {
+            c.MountAfterZoneChange ? "zone" : null, c.MountAfterCombat ? "combat" : null, c.MountAfterGathering ? "gather" : null,
+            c.MountAfterCrafting ? "craft" : null, c.MountAfterTalking ? "talk" : null,
+        }.Where(x => x != null));
+        var on = string.Join(",", new[]
+        {
+            c.AutoSprint ? "sprint" : null, c.KeepPeloton ? "peloton" : null,
+            mountOn.Length > 0 ? "mount:" + mountOn : null,
+            c.DismountOnAction ? (c.ReplayAction ? "actionDismount+replay" : "actionDismount") : null,
+            c.DismountOnEnemy ? "enemy:" + (c.EnemyMode == EnemyDismount.InRange ? "inRange" : "whenTargeted") : null,
+        }.Where(x => x != null));
+        return string.Create(ci,
+            $"foot={(OnFoot.Watching ? "watching" : "off")}; moving={OnFoot.MovingFor:0.0}; mount={mount}; effectWait={(OnFoot.WaitingForEffect ? 1 : 0)}; "
+          + $"ride={ride}; replay={(ActionDismount.ReplayPending ? 1 : 0)}; hook={(ActionDismount.HookWorks ? 1 : 0)}; "
+          + $"range={Range.Yalms:0} {Range.ActionName}; "
+          + $"run={c.RunSpeed:0.0}({c.RunSamples}); sprint={c.SprintSpeed:0.0}({c.SprintSamples}); peloton={c.PelotonSpeed:0.0}({c.PelotonSamples}); "
+          + $"lag={c.ActionLagSeconds:0.00}({c.ActionLagSamples}); trip={(Link.TripActive ? 1 : 0)}; on={on}");
+    }
 }

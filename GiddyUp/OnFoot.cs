@@ -43,6 +43,10 @@ internal sealed unsafe class OnFoot : IDisposable
     private Configuration Config => _p.Config;
 
     internal string? MountReason => _mountReason;
+    internal MountTiming PendingMountTiming => _mountTiming;
+    /// <summary>For the test probe: how long you've been moving (s), and an effect wait in progress.</summary>
+    internal float MovingFor => _movingFor;
+    internal bool WaitingForEffect => _waiting;
 
     /// <summary>
     /// A mount is on its way: Giddy Up will summon one (after a fight, gathering...), or a Beeline trip will on this

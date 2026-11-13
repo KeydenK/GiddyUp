@@ -37,8 +37,10 @@ internal sealed unsafe class Mounted : IDisposable
     private Vector2 _refusedSpot;    // where the game last ignored a landing (flat)
     private bool _refusedSpotSet;
 
+#if DEVTOOLS
     /// <summary>The game ignored a landing here: the next press waits until you've moved a little (for tests).</summary>
     internal bool CantLandWaiting => _refusedSpotSet;
+#endif
 
     // A dismount Giddy Up started (for an enemy or an action): when, from what height, and how it went.
     private long _dismountAt;        // first press (0 = none in progress)

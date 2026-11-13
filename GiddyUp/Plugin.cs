@@ -79,7 +79,9 @@ public sealed class Plugin : IDalamudPlugin
         ClientState.Logout           += OnLogout;
 
         Commands.AddHandler(Command, new CommandInfo(OnCommand) { HelpMessage = "Open the settings." });
+#if DEVTOOLS
         TestProbe.Register(PluginInterface, "GiddyUp", TestState); // dev builds only
+#endif
 
         // Plugin loaded while already in game.
         Framework.RunOnFrameworkThread(() =>
@@ -103,7 +105,9 @@ public sealed class Plugin : IDalamudPlugin
 
     public void Dispose()
     {
+#if DEVTOOLS
         TestProbe.Unregister();
+#endif
         Condition.ConditionChange    -= OnConditionChange;
         ClientState.TerritoryChanged -= OnTerritoryChanged;
         ClientState.ClassJobChanged  -= OnClassJobChanged;
@@ -195,6 +199,7 @@ public sealed class Plugin : IDalamudPlugin
 
     private void OnCommand(string command, string args) => _configWindow.Toggle();
 
+#if DEVTOOLS
     /// <summary>
     /// For tests (dev builds only, see TestProbe): one line of what Giddy Up is doing right now. Only reads fields.
     /// </summary>
@@ -227,4 +232,5 @@ public sealed class Plugin : IDalamudPlugin
           + $"run={c.RunSpeed:0.0}({c.RunSamples}); sprint={c.SprintSpeed:0.0}({c.SprintSamples}); peloton={c.PelotonSpeed:0.0}({c.PelotonSamples}); "
           + $"lag={c.ActionLagSeconds:0.00}({c.ActionLagSamples}); trip={(Link.TripActive ? 1 : 0)}; on={on}");
     }
+#endif
 }

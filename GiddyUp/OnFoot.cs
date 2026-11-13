@@ -45,6 +45,12 @@ internal sealed unsafe class OnFoot : IDisposable
     internal string? MountReason => _mountReason;
 
     /// <summary>
+    /// A mount is on its way: Giddy Up will summon one (after a fight, gathering...), or a Beeline trip will on this
+    /// leg. A Peloton now would only delay the summon by its animation, and mounting ends it anyway.
+    /// </summary>
+    internal bool MountComing => _mountReason != null || (_p.Link.TripActive && _p.Link.BeelineWillMount());
+
+    /// <summary>
     /// Your target when Giddy Up last summoned a mount, and when: an enemy you target while the mount is being
     /// summoned (a summon can't be cancelled) then counts as a new target, so you get off as soon as it's there.
     /// </summary>
@@ -132,6 +138,8 @@ internal sealed unsafe class OnFoot : IDisposable
                 if (_mountReason != null)
                     Plugin.Info($"Mounted ({_mountReason} done)");
                 _mountReason = null;
+                if (_waitMount)
+                    _waiting = false; // that summon's wait is over
                 break;
             case ConditionFlag.BetweenAreas:
                 Trigger(value, Config.MountAfterZoneChange, Config.ZoneChangeTiming, "zone change");
@@ -287,7 +295,8 @@ internal sealed unsafe class OnFoot : IDisposable
                     Plugin.Info("Sprint didn't go through (another action at the same moment): again");
                 _waiting = false;
             }
-            else if (_waitMount && since >= TickMs / 1000f && !Game.Busy() && !Game.IsMounted)
+            else if (_waitMount && _mountReason != null && since >= TickMs / 1000f && since <= 2f
+                     && !Game.Busy() && !Game.IsMounted)
             {
                 // A summon that went through shows as a cast at once: nothing a tick later means the press was
                 // dropped (another action went off at the same moment, e.g. one used by another plugin). Press again

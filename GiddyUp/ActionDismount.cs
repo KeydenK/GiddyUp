@@ -41,6 +41,8 @@ internal sealed unsafe class ActionDismount : IDisposable
     /// </summary>
     internal long LastActionAt { get; private set; }
 
+    private long _pelotonHeldLogAt;
+
     public ActionDismount(Plugin p)
     {
         _p = p;
@@ -68,6 +70,20 @@ internal sealed unsafe class ActionDismount : IDisposable
         if (type is ActionType.Action or ActionType.Item && !Game.OwnCall && !_replaying
             && !(type == ActionType.Action && id == Game.PelotonAction))
             LastActionAt = Environment.TickCount64;
+        // Peloton from elsewhere (another plugin, or you) while a mount is on its way and you're on foot: held back.
+        // Its animation would only push the summon back (about a second), and mounting ends it anyway.
+        if (type == ActionType.Action && id == Game.PelotonAction && !Game.OwnCall
+            && !Plugin.Condition[ConditionFlag.Mounted] && !Plugin.Condition[ConditionFlag.RidingPillion]
+            && _p.OnFoot.MountComing)
+        {
+            var at = Environment.TickCount64;
+            if (at - _pelotonHeldLogAt > 10_000)
+            {
+                _pelotonHeldLogAt = at;
+                Plugin.Info("Peloton held back: a mount is on its way (mounting would end it)");
+            }
+            return false;
+        }
         try
         {
             // Off the mount and another action came first: it wins, no replay on top of it.

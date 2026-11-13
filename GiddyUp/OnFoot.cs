@@ -170,6 +170,10 @@ internal sealed unsafe class OnFoot : IDisposable
             return; // Beeline decides mounting during its trips
         if (Game.IsMounted || !MountAllowedHere())
             return;
+        // Already about to mount right away (e.g. a zone change): an event ending just after (a teleport is one too)
+        // doesn't turn that into "when you start moving".
+        if (_mountReason != null && _mountTiming == MountTiming.RightAway && timing == MountTiming.WhenMoving)
+            return;
         _mountReason = reason;
         _mountTiming = timing;
         _mountCasts = _mountRefusals = 0;
@@ -321,14 +325,19 @@ internal sealed unsafe class OnFoot : IDisposable
             return;
         }
 
-        // 3. Peloton: keep it up. It goes on in Sprint's last moments so it takes over when Sprint ends (no Jog then),
-        //    and is renewed just before it runs out. "Last moments" = your measured action delay, twice, plus a tick.
+        // 3. Peloton: keep it up. It goes on about 2 s before Sprint ends so it has surely taken over by then (no Jog
+        //    then), and is renewed just before it runs out ("just before" = your measured action delay, twice, plus
+        //    a tick).
         if (!Config.KeepPeloton)
             return;
         var lead = Config.ActionLagSeconds * 2f + TickMs / 1000f * 2f;
         if (pelotonLeft > lead)
             return;
-        if (sprintLeft > lead && Config.SprintSpeed >= Config.PelotonSpeed)
+        if (sprintLeft > lead + 1.5f && Config.SprintSpeed >= Config.PelotonSpeed)
+            return;
+        // On a Beeline trip where Beeline uses Sprint (yours is off): a Sprint it's about to use, or just used (its
+        // effect takes a moment to show up), would end up under a Peloton put on now.
+        if (sprintLeft <= 0 && !Config.AutoSprint && _p.Link.TripActive && SprintComing(now))
             return;
         if (jogLeft > 0 && sprintLeft <= 0 && Config.JogSpeed >= Config.PelotonSpeed)
             return;
@@ -338,6 +347,25 @@ internal sealed unsafe class OnFoot : IDisposable
             Plugin.Info(pelotonLeft > 0 ? "Peloton renewed" : sprintLeft > 0 ? "Peloton (taking over from Sprint)" : "Peloton");
             Wait(pelotonLeft > 0 ? 0 : Game.PelotonStatus, now);
         }
+    }
+
+    private long _sprintReadySince, _sprintGoneSince;
+
+    /// <summary>
+    /// Someone else (Beeline) may be about to use Sprint, or just did: ready for under 3 s (it'd use it by then), or
+    /// gone on cooldown under 2 s ago (its effect not showing yet).
+    /// </summary>
+    private bool SprintComing(long now)
+    {
+        if (Game.Ready(ActionType.GeneralAction, Game.Sprint))
+        {
+            _sprintGoneSince = 0;
+            if (_sprintReadySince == 0) _sprintReadySince = now;
+            return now - _sprintReadySince < 3000;
+        }
+        _sprintReadySince = 0;
+        if (_sprintGoneSince == 0) _sprintGoneSince = now;
+        return now - _sprintGoneSince < 2000;
     }
 
     /// <summary>Your target is something you could attack (as the game decides: auto-attack would work on it).</summary>

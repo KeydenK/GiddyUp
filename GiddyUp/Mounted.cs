@@ -275,7 +275,10 @@ internal sealed unsafe class Mounted : IDisposable
             return false;
         var still = IsStill(player, now);
         if (still == true)
+        {
+            HideNotice(now);
             return false;
+        }
         Now = State.WaitingStill;
         if (still == null)
             return true; // not measured yet: look again in a quarter of a second, say nothing meanwhile
@@ -288,9 +291,37 @@ internal sealed unsafe class Mounted : IDisposable
                 _p.Link.DismountedForCombat(); // the trip stops, and with it the movement
             }
             else if (Config.HoldStillNotice)
+            {
                 Plugin.Toast.ShowNormal("Giddy Up: hold still to land");
+                _noticeAt = now;
+            }
         }
         return true;
+    }
+
+    private long _noticeAt; // when "hold still to land" was shown (0 = not on screen)
+
+    /// <summary>
+    /// You're holding still now: take "hold still to land" off the screen right away instead of letting it run its
+    /// course. Only within a few seconds of showing it (the game's message line shows one message at a time; after
+    /// that, whatever is there isn't ours).
+    /// </summary>
+    private void HideNotice(long now)
+    {
+        if (_noticeAt == 0)
+            return;
+        var ours = now - _noticeAt < 3000;
+        _noticeAt = 0;
+        if (!ours)
+            return;
+        var addon = Plugin.GameGui.GetAddonByName("_WideText");
+        if (!addon.IsNull && addon.IsVisible)
+        {
+            ((FFXIVClientStructs.FFXIV.Component.GUI.AtkUnitBase*)addon.Address)->Hide(false, false, 0);
+            Plugin.Info("You hold still: notice taken off the screen");
+        }
+        else
+            Plugin.Info("You hold still: notice already gone");
     }
 
     /// <summary>

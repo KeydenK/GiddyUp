@@ -11,6 +11,8 @@ internal static unsafe class Game
     // Verified IDs (game data): general actions, Peloton, statuses.
     internal const uint MountRoulette = 9, Dismount = 23, Sprint = 4;
     internal const uint PelotonAction = 7557;
+    /// <summary>The action behind the Sprint general action (what UseAction is asked for when it's used directly).</summary>
+    internal const uint SprintAction = 3;
     internal const uint SprintStatus = 50, PelotonStatus = 1199, JogStatus = 4209;
 
     internal static BattleChara* Player => Control.GetLocalPlayer();

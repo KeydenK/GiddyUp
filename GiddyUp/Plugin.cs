@@ -78,7 +78,7 @@ public sealed class Plugin : IDalamudPlugin
         ClientState.Login            += OnLogin;
         ClientState.Logout           += OnLogout;
 
-        Commands.AddHandler(Command, new CommandInfo(OnCommand) { HelpMessage = "Open the settings." });
+        TryAddCommand();
 #if DEVTOOLS
         TestProbe.Register(PluginInterface, "GiddyUp", TestState); // dev builds only
 #endif
@@ -113,7 +113,9 @@ public sealed class Plugin : IDalamudPlugin
         ClientState.ClassJobChanged  -= OnClassJobChanged;
         ClientState.Login            -= OnLogin;
         ClientState.Logout           -= OnLogout;
-        Commands.RemoveHandler(Command);
+        _disposed = true;
+        if (_commandOwned)
+            Commands.RemoveHandler(Command);
         Link.Dispose();
         ActionDismount.Dispose();
         Mounted.Dispose();
@@ -198,6 +200,31 @@ public sealed class Plugin : IDalamudPlugin
     }
 
     private void OnCommand(string command, string args) => _configWindow.Toggle();
+
+    private bool _commandOwned, _commandWaiting, _disposed;
+
+    /// <summary>
+    /// Registers /giddyup. If something else holds it (e.g. another copy of Giddy Up that's still loaded while you
+    /// switch to this one), looks again every 2 s and takes it as soon as it's free, so it never stays missing.
+    /// </summary>
+    private void TryAddCommand()
+    {
+        if (_commandOwned || _disposed)
+            return;
+        if (!Commands.Commands.ContainsKey(Command) && Commands.AddHandler(Command, new CommandInfo(OnCommand) { HelpMessage = "Open the settings." }))
+        {
+            _commandOwned = true;
+            if (_commandWaiting)
+                Log.Information($"{Command} is free again: registered");
+            return;
+        }
+        if (!_commandWaiting)
+        {
+            _commandWaiting = true;
+            Log.Warning($"{Command} is already used by another plugin (another copy of Giddy Up?): taking it as soon as it's free. The settings also open from the plugin list.");
+        }
+        Framework.RunOnTick(TryAddCommand, TimeSpan.FromSeconds(2));
+    }
 
 #if DEVTOOLS
     /// <summary>

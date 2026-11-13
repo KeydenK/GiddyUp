@@ -46,7 +46,7 @@ internal sealed unsafe class ActionDismount : IDisposable
     internal long LastActionAt { get; private set; }
 
     private long _pelotonHeldLogAt;
-    private string? _pelotonHeldWhy;
+    private string? _pelotonHeldWhy, _pelotonHeldName;
 
     public ActionDismount(Plugin p)
     {
@@ -95,11 +95,11 @@ internal sealed unsafe class ActionDismount : IDisposable
         return _locHook!.Original(am, type, id, target, location, extra, a7);
     }
 
-    /// <summary>Peloton (whoever uses it) is a running buff, not a sign you're still busy: like Sprint, it doesn't delay the mount.</summary>
+    /// <summary>Sprint and Peloton (whoever uses them) are running buffs, not a sign you're still busy: they don't delay the mount.</summary>
     private void NoteAction(ActionType type, uint id)
     {
         if (type is ActionType.Action or ActionType.Item && !Game.OwnCall && !_replaying
-            && !(type == ActionType.Action && id == Game.PelotonAction))
+            && !(type == ActionType.Action && id is Game.PelotonAction or Game.SprintAction))
             LastActionAt = Environment.TickCount64;
     }
 
@@ -112,7 +112,8 @@ internal sealed unsafe class ActionDismount : IDisposable
     }
 
     /// <summary>
-    /// Peloton from elsewhere (another plugin, or you), on foot, when it can only cost time: held back.
+    /// Sprint or Peloton from elsewhere (another plugin, or you), on foot, when it can only cost time: held back.
+    /// Giddy Up's own never are (it doesn't use them at those moments anyway).
     /// </summary>
     private bool HoldPeloton(ActionType type, uint id)
     {
@@ -120,7 +121,11 @@ internal sealed unsafe class ActionDismount : IDisposable
         //   the summon back by about a second, and mounting ends it anyway.
         // - Out of combat, the enemy Giddy Up just got you off the mount for is targeted and within your attack range:
         //   you're about to attack, and its animation would only delay your first hit.
-        if (type == ActionType.Action && id == Game.PelotonAction && !Game.OwnCall
+        // Sprint arrives as the general action (4) or as the action behind it (3), depending on who asks.
+        var name = type == ActionType.Action && id == Game.PelotonAction ? "Peloton"
+                 : (type == ActionType.GeneralAction && id == Game.Sprint) || (type == ActionType.Action && id == Game.SprintAction) ? "Sprint"
+                 : null;
+        if (name != null && !Game.OwnCall
             && !Plugin.Condition[ConditionFlag.Mounted] && !Plugin.Condition[ConditionFlag.RidingPillion])
         {
             var why = _p.OnFoot.MountComing ? "a mount is on its way (mounting would end it)"
@@ -129,11 +134,12 @@ internal sealed unsafe class ActionDismount : IDisposable
             if (why != null)
             {
                 var at = Environment.TickCount64;
-                if (at - _pelotonHeldLogAt > 10_000 || why != _pelotonHeldWhy)
+                if (at - _pelotonHeldLogAt > 10_000 || why != _pelotonHeldWhy || name != _pelotonHeldName)
                 {
                     _pelotonHeldLogAt = at;
                     _pelotonHeldWhy = why;
-                    Plugin.Info($"Peloton held back: {why}");
+                    _pelotonHeldName = name;
+                    Plugin.Info($"{name} held back: {why}");
                 }
                 return true;
             }

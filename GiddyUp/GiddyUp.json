@@ -18,5 +18,5 @@
   "CategoryTags": [
     "utility"
   ],
-  "Changelog": "First release."
+  "Changelog": "/giddyup now always works: if another copy of Giddy Up still held it while you switched (for example from a test build), Giddy Up takes it as soon as it's free. Sprint used by something else is now held back like Peloton: right before a mount comes (after a fight, a teleport, a conversation...) and right before your first attack after Giddy Up gets you off for an enemy, since mounting ends it and its animation only delays you."
 }

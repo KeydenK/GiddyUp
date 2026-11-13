@@ -36,8 +36,8 @@ speeds so it never gets in your way.
 - **Uses Sprint when it helps** (when it's faster than how you're moving right now) and **keeps Peloton up** on
   Archer, Bard, Machinist and Dancer, with Peloton taking over in Sprint's last seconds. Nothing when a mount is about
   to be summoned, or when you're about to fight.
-- **Doesn't waste Peloton.** A Peloton used right before you mount (mounting ends it) or right before your first
-  attack only delays you: it's held back then, whoever used it.
+- **Doesn't waste Sprint or Peloton.** One used right before you mount (mounting ends it) or right before your
+  first attack only delays you: it's held back then, whoever used it.
 - **Learns how you play.** Your running, Sprint, Jog and Peloton speeds, how fast you land and get off, and how long
   your actions take to go off are measured as you play, and everything is timed from them.
 - **Tells you what's going on**, through the game's own message line: "hold still to land" (moving stops the game's

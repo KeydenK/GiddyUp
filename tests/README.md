@@ -89,5 +89,8 @@ matter are asserted explicitly.
   A scenario can't reload a plugin.
 - **Hover at ground level, then dismount**: a flying mount hovering just above the floor must get off right
   away (`landed from 0 y`, off in ~0.2 s).
-- **Peloton held back** (`Peloton held back: …`) while a mount is pending or before an enemy dismount: needs a
-  pending mount or an enemy approach at the right moment.
+- **Sprint / Peloton held back** (`Sprint held back: …`, `Peloton held back: …`) when another plugin uses them while
+  a mount is pending (after a fight, a teleport, a conversation or object) or right after an enemy dismount: needs
+  the other plugin to act at that moment. Giddy Up's own Sprint is never held back.
+- **/giddyup taken by another copy** (1.0.1): with a second Giddy Up loaded, the log says `/giddyup is already used
+  by another plugin`; unload the other copy and `/giddyup is free again: registered` follows within 2 s.

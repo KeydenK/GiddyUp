@@ -286,6 +286,7 @@ internal sealed unsafe class OnFoot : IDisposable
                 _waiting = false;
             }
             else if (_waitSprint && since >= TickMs / 1000f && _sprintRetries < 10
+                     && ActionManager.Instance()->AnimationLock <= 0
                      && Game.Ready(ActionType.GeneralAction, Game.Sprint))
             {
                 // A Sprint that went through starts its cooldown at once: still ready a tick later means the press
@@ -351,9 +352,12 @@ internal sealed unsafe class OnFoot : IDisposable
         if (walking || _movingFor < Config.MoveSeconds || enemyTargeted)
             return;
 
-        // 2. Sprint: when it's ready and faster than how you move right now.
+        // 2. Sprint: when it's ready and faster than how you move right now. Not during another action's animation
+        //    (e.g. a Peloton someone else just used): pressed then, it's dropped or queued and needs re-presses;
+        //    pressed the moment the animation ends, it goes off at once with a single press.
         var current = Math.Max(Config.RunSpeed, Math.Max(pelotonLeft > 0 ? Config.PelotonSpeed : 0, jogLeft > 0 ? Config.JogSpeed : 0));
         if (Config.AutoSprint && sprintLeft <= 0 && Config.SprintSpeed > current
+            && ActionManager.Instance()->AnimationLock <= 0
             && Game.Ready(ActionType.GeneralAction, Game.Sprint) && !_p.Link.BeelineWillMount()
             && Game.Use(ActionType.GeneralAction, Game.Sprint))
         {

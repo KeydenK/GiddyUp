@@ -73,7 +73,10 @@ matter are asserted explicitly.
 - **Dismount while flying (landing first, second press on touchdown) and "hold still to land"**: needs flying
   toward an enemy and holding still at the right moment; timing-dependent.
 - **"Can't land here" notice**: needs a spot where the game refuses the landing (only certain terrain); can't be
-  set up from a scenario.
+  set up from a scenario. Seen twice on 2026-11-13: hovering at floor level over Odqans in Thavnair near
+  (115.8, 24.9, -83.7) during a Beeline trip, and against a tent canopy at Yedlihmad. Not every hover there
+  refuses (a later try at the Odqan spot landed at once). Expect: one re-press, the notice once, then no press
+  until you've moved 1.5 y and hold still (probe `cantLand=1` meanwhile), notice gone as soon as you go down.
 - **Peloton renewal and the Sprint-to-Peloton hand-over** (`Peloton renewed`, `Peloton (taking over from Sprint)`):
   needs 20-30 s of continuous walking, longer than one stick hold and more open ground than a test spot usually has.
 - **Beeline link** (no auto-mount during trips, speeds from Beeline): needs Beeline and a trip.

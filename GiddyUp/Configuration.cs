@@ -3,7 +3,8 @@ namespace GiddyUp;
 [Serializable]
 public sealed class Configuration : Dalamud.Configuration.IPluginConfiguration
 {
-    public int Version { get; set; } = 1;
+    /// <summary>2: the "hold still to land" notice is on by default (it uses the game's own message line).</summary>
+    public int Version { get; set; } = 2;
 
     // ---------------- On foot ----------------
     /// <summary>Use Sprint when it's ready and faster than how you move right now (out of combat).</summary>
@@ -47,7 +48,7 @@ public sealed class Configuration : Dalamud.Configuration.IPluginConfiguration
     /// <summary>Tanks and melee DPS: use melee range instead of their ranged opener (Shield Lob, Piercing Talon...).</summary>
     public bool MeleeAtMeleeRange { get; set; }
     /// <summary>Flying with an enemy in range while you move: show a "hold still to land" notice on screen.</summary>
-    public bool HoldStillNotice { get; set; }
+    public bool HoldStillNotice { get; set; } = true;
     /// <summary>Riding on the ground: dismount only once you stop moving.</summary>
     public bool RideDismountWhenStill { get; set; }
 

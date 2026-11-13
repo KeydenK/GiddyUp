@@ -50,6 +50,12 @@ public sealed class Plugin : IDalamudPlugin
     {
         Config = PluginInterface.GetPluginConfig() as Configuration ?? new Configuration();
         _cfg   = Config;
+        if (Config.Version < 2)
+        {
+            Config.HoldStillNotice = true; // now on by default: switch it on once for test builds that had it off
+            Config.Version = 2;
+            PluginInterface.SavePluginConfig(Config);
+        }
 
         Speeds         = new Speeds(this);
         Range          = new AttackRange { MeleeAtMelee = Config.MeleeAtMeleeRange };

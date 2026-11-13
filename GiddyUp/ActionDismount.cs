@@ -1,3 +1,4 @@
+using System.Numerics;
 using Dalamud.Game.ClientState.Conditions;
 using Dalamud.Hooking;
 using Dalamud.Plugin.Services;
@@ -18,6 +19,9 @@ internal sealed unsafe class ActionDismount : IDisposable
 {
     private readonly Plugin _p;
     private readonly Hook<ActionManager.Delegates.UseAction>? _hook;
+    // The lower-level "use at a location" the game's own use goes through, and that some plugins call directly:
+    // watched too, so their actions count (busy after a fight) and their Peloton can be held back like any other.
+    private readonly Hook<ActionManager.Delegates.UseActionLocation>? _locHook;
 
     private bool _queued;
     private ActionType _type;
@@ -57,21 +61,61 @@ internal sealed unsafe class ActionDismount : IDisposable
         {
             Plugin.Log.Error(e, $"Couldn't hook action use: \"dismount when using an action\" is unavailable");
         }
+        try
+        {
+            _locHook = Plugin.Hooks.HookFromAddress<ActionManager.Delegates.UseActionLocation>(
+                (nint)ActionManager.MemberFunctionPointers.UseActionLocation, LocationDetour);
+            _locHook.Enable();
+        }
+        catch (Exception e)
+        {
+            Plugin.Log.Error(e, "Couldn't hook action use at a location: other plugins' actions may go unnoticed");
+        }
     }
 
     public void Dispose()
     {
         StopReplay();
         _hook?.Dispose();
+        _locHook?.Dispose();
+    }
+
+    private bool LocationDetour(ActionManager* am, ActionType type, uint id, ulong target, Vector3* location, uint extra, byte a7)
+    {
+        try
+        {
+            NoteAction(type, id);
+            if (HoldPeloton(type, id))
+                return false;
+        }
+        catch (Exception e)
+        {
+            Plugin.Log.Error(e, "Action check failed");
+        }
+        return _locHook!.Original(am, type, id, target, location, extra, a7);
+    }
+
+    /// <summary>Peloton (whoever uses it) is a running buff, not a sign you're still busy: like Sprint, it doesn't delay the mount.</summary>
+    private void NoteAction(ActionType type, uint id)
+    {
+        if (type is ActionType.Action or ActionType.Item && !Game.OwnCall && !_replaying
+            && !(type == ActionType.Action && id == Game.PelotonAction))
+            LastActionAt = Environment.TickCount64;
     }
 
     private bool Detour(ActionManager* am, ActionType type, uint id, ulong target, uint extra, UseActionMode mode, uint combo, bool* outAreaTargeted)
     {
-        // Peloton (whoever uses it) is a running buff, not a sign you're still busy: like Sprint, it doesn't delay the mount.
-        if (type is ActionType.Action or ActionType.Item && !Game.OwnCall && !_replaying
-            && !(type == ActionType.Action && id == Game.PelotonAction))
-            LastActionAt = Environment.TickCount64;
-        // Peloton from elsewhere (another plugin, or you), on foot, when it can only cost time: held back.
+        NoteAction(type, id);
+        if (HoldPeloton(type, id))
+            return false;
+        return Dismounting(am, type, id, target, extra, mode, combo, outAreaTargeted);
+    }
+
+    /// <summary>
+    /// Peloton from elsewhere (another plugin, or you), on foot, when it can only cost time: held back.
+    /// </summary>
+    private bool HoldPeloton(ActionType type, uint id)
+    {
         // - A mount is on its way (after a fight, a teleport, a Beeline leg that mounts...): its animation would push
         //   the summon back by about a second, and mounting ends it anyway.
         // - Out of combat, the enemy Giddy Up just got you off the mount for is targeted and within your attack range:
@@ -91,9 +135,14 @@ internal sealed unsafe class ActionDismount : IDisposable
                     _pelotonHeldWhy = why;
                     Plugin.Info($"Peloton held back: {why}");
                 }
-                return false;
+                return true;
             }
         }
+        return false;
+    }
+
+    private bool Dismounting(ActionManager* am, ActionType type, uint id, ulong target, uint extra, UseActionMode mode, uint combo, bool* outAreaTargeted)
+    {
         try
         {
             // Off the mount and another action came first: it wins, no replay on top of it.

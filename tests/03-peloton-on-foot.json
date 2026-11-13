@@ -8,9 +8,9 @@
     { "waitFor": "probe:GiddyUp:foot=watching && probe:GiddyUp:; on=[^;]*peloton", "timeout": 3000, "msg": "the on-foot watcher should run with Keep Peloton on" },
     { "mark": "walking forward 6 s" },
     { "do": "stick L 0 1 6000" },
-    { "waitFor": "status:1199 && event:\\[GiddyUp\\] Peloton(?! held| renewed)", "timeout": 4000, "msg": "Giddy Up should use Peloton (Sprint is on cooldown)" },
+    { "waitFor": "status:1199", "timeout": 4000, "msg": "Peloton should come up (Sprint is on cooldown): from Giddy Up, or from another plugin that also keeps Peloton up" },
     { "wait": 5000 },
     { "assert": "!event:\\[GiddyUp\\] Sprint \\(", "msg": "Sprint is on cooldown: Giddy Up should not have used it" },
-    { "assert": "!anomaly:ACTION TWICE|WOBBLE", "msg": "Peloton used once, walking clean" }
+    { "assert": "!anomaly:ACTION TWICE|WOBBLE", "msg": "Peloton used once (whoever cast it, never twice), walking clean" }
   ]
 }

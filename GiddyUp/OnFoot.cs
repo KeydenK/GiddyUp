@@ -270,19 +270,28 @@ internal sealed unsafe class OnFoot : IDisposable
             var since = (now - _waitSince) / 1000f;
             if (_waitStatus != 0 && Game.StatusLeft(player, _waitStatus) > 0)
             {
-                _p.Speeds.LearnActionLag(since);
+                // A re-pressed Sprint may have waited in the game's queue: not a clean sample of your action delay.
+                if (!_waitSprint || _sprintRetries == 0)
+                    _p.Speeds.LearnActionLag(since);
+                if (_waitSprint)
+                    _sprintRetries = 0;
                 _waiting = false;
             }
-            else if (_waitSprint && since > Config.ActionLagSeconds * 2f + TickMs / 1000f
+            else if (_waitSprint && since >= TickMs / 1000f && _sprintRetries < 10
                      && Game.Ready(ActionType.GeneralAction, Game.Sprint))
             {
-                // Sprint still ready: the press was dropped (another action went off at the same moment, e.g. one
-                // used by another plugin). Try again now rather than after the full wait.
-                Plugin.Info("Sprint didn't go through (another action at the same moment): again");
+                // A Sprint that went through starts its cooldown at once: still ready a tick later means the press
+                // was dropped (another action went off at the same moment, e.g. one used by another plugin). Press
+                // again right away; during that action's animation the game queues it, so it goes off the moment it can.
+                if (_sprintRetries++ == 0)
+                    Plugin.Info("Sprint didn't go through (another action at the same moment): again");
                 _waiting = false;
             }
             else if (since > 2f)
+            {
                 _waiting = false;
+                _sprintRetries = 0;
+            }
             else
                 return;
         }
@@ -386,6 +395,7 @@ internal sealed unsafe class OnFoot : IDisposable
     }
 
     private bool _waitSprint; // the wait is for a Sprint press (a dropped one shows: Sprint stays ready)
+    private int _sprintRetries; // re-presses of a dropped Sprint, until one goes through
 
     private void Wait(uint status, long now)
     {

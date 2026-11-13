@@ -318,7 +318,7 @@ internal sealed unsafe class Mounted : IDisposable
         if (unit != null)
         {
             unit->Hide(false, false, 0);
-            Plugin.Info($"You hold still: notice taken off the screen ({System.Text.Encoding.UTF8.GetString(unit->Name).TrimEnd('\0')})");
+            Plugin.Info($"You hold still: notice taken off the screen ({System.Text.Encoding.UTF8.GetString(unit->Name).Split('\0')[0]})");
         }
         else
             Plugin.Info("You hold still: notice already gone");
